@@ -1,0 +1,12 @@
+name = "grand-cms"
+main = "server.ts"
+compatibility_date = "2026-01-01"
+
+# Cloudflare D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "grand-cms-db"
+database_id = "your-cloudflare-d1-database-id"
+
+[site]
+bucket = "./dist"

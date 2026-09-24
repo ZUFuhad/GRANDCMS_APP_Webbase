@@ -1,0 +1,6 @@
+{
+  "name": "Grand CMS",
+  "description": "Enterprise ERP & CMS for service-oriented agency Grand Communication & Marketing. Features Quotations, Invoicing, Clients/Suppliers, Liability Tracking, Push Notifications, AI Client Discovery & Design Generator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
