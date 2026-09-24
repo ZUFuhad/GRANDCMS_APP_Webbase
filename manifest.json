@@ -1,0 +1,15 @@
+{
+  "name": "Grand CMS - Enterprise ERP",
+  "short_name": "Grand CMS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B192C",
+  "theme_color": "#0B192C",
+  "icons": [
+    {
+      "src": "/grand-logo.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
