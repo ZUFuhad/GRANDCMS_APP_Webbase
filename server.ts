@@ -36,6 +36,17 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
+// Download Project ZIP for GitHub Upload
+app.get(['/download-project-zip', '/api/download-zip', '/grand-cms-project.zip'], (_req: Request, res: Response) => {
+  const publicZip = path.resolve(__dirname, 'public', 'grand-cms-project.zip');
+  const rootZip = path.resolve(__dirname, 'grand-cms-project.zip');
+  res.download(publicZip, 'grand-cms-project.zip', (err) => {
+    if (err && !res.headersSent) {
+      res.download(rootZip, 'grand-cms-project.zip');
+    }
+  });
+});
+
 // Agentic Growth System - AI Client Discovery Endpoint
 app.post('/api/discovery', async (req: Request, res: Response) => {
   try {

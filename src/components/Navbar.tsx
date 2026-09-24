@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   ChevronDown,
   Layers,
+  Download,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -42,8 +43,23 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [mobileNumber, setMobileNumber] = useState(() => localStorage.getItem('grand_cms_user_mobile') || '+8801819998877');
+  const [isEditingMobile, setIsEditingMobile] = useState(false);
+  const [tempMobile, setTempMobile] = useState(mobileNumber);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const handleSaveMobile = () => {
+    setMobileNumber(tempMobile);
+    localStorage.setItem('grand_cms_user_mobile', tempMobile);
+    setIsEditingMobile(false);
+  };
+
+  const handleSendToWhatsApp = (n: AppNotification) => {
+    const text = encodeURIComponent(`*GRAND CMS Alert*\n\n*${n.title}*\n${n.message}\nTime: ${n.timestamp}`);
+    const cleanNum = mobileNumber.replace(/[^0-9]/g, '');
+    window.open(`https://wa.me/${cleanNum}?text=${text}`, '_blank');
+  };
 
   return (
     <header className="bg-[#0B192C] border-b border-[#1E3E62] sticky top-0 z-40 text-white shadow-lg">
@@ -91,6 +107,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </>
               )}
             </button>
+
+            {/* Download Project ZIP for GitHub */}
+            <a
+              href="/grand-cms-project.zip"
+              download="grand-cms-project.zip"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+              title="Download full project ZIP for GitHub"
+            >
+              <Download className="w-3.5 h-3.5 text-white" />
+              <span className="hidden sm:inline">Project ZIP</span>
+            </a>
 
             {/* Quick Action Button in Navy Blue / White */}
             <div className="relative">
@@ -179,6 +206,38 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* Notification Popover */}
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#0B192C] border border-[#1E3E62] rounded-2xl shadow-2xl overflow-hidden z-50 text-xs">
+                  {/* Mobile Number & WhatsApp Alert Setup Bar */}
+                  <div className="p-3 bg-[#102A43] border-b border-[#1E3E62] text-[11px] text-blue-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Mobile: <strong className="text-white">{mobileNumber}</strong></span>
+                    </div>
+                    {isEditingMobile ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={tempMobile}
+                          onChange={(e) => setTempMobile(e.target.value)}
+                          className="w-28 px-2 py-0.5 rounded bg-[#071322] border border-blue-400 text-white text-[11px]"
+                          placeholder="+8801..."
+                        />
+                        <button
+                          onClick={handleSaveMobile}
+                          className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold cursor-pointer"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setIsEditingMobile(true)}
+                        className="text-blue-300 hover:underline font-semibold cursor-pointer"
+                      >
+                        Change Number
+                      </button>
+                    )}
+                  </div>
+
                   <div className="p-3.5 bg-[#071322] border-b border-[#1E3E62] flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-white text-sm">Notifications</span>
@@ -227,6 +286,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <p className="text-blue-100 text-[11px] mt-1 leading-snug">
                             {n.message}
                           </p>
+                          <div className="mt-2 flex items-center justify-end">
+                            <button
+                              onClick={() => handleSendToWhatsApp(n)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1 transition-all cursor-pointer"
+                              title="Forward to Mobile / WhatsApp"
+                            >
+                              <Smartphone className="w-3 h-3" />
+                              Send to WhatsApp
+                            </button>
+                          </div>
                         </div>
                       ))
                     )}

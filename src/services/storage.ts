@@ -22,6 +22,7 @@ import {
   INITIAL_PROSPECTS,
   DEFAULT_USER,
 } from '../mock/initialData';
+import { SupabaseService } from './supabase';
 
 const STORAGE_KEYS = {
   CLIENTS: 'grand_cms_clients_v1',
@@ -483,6 +484,108 @@ class StorageServiceEngine {
     });
 
     return sql;
+  }
+
+  // Supabase Cloud Synchronization
+  async syncFromSupabase(): Promise<{ success: boolean; message: string; counts?: any }> {
+    const client = SupabaseService.getClient();
+    if (!client) {
+      return { success: false, message: 'Supabase client is not connected' };
+    }
+
+    try {
+      // 1. Fetch clients
+      const { data: dbClients, error: clientErr } = await client.from('clients').select('*');
+      if (clientErr) throw clientErr;
+
+      if (dbClients && dbClients.length > 0) {
+        const mappedClients: Client[] = dbClients.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          companyName: c.company_name || c.name,
+          email: c.email || '',
+          phone: c.phone || '',
+          address: c.address || '',
+          city: c.city || 'Chattogram',
+          contactPerson: c.contact_person || '',
+          designation: c.designation || '',
+          tradeLicense: c.trade_license,
+          totalBilled: Number(c.total_billed || 0),
+          totalPaid: Number(c.total_paid || 0),
+          currentDue: Number(c.current_due || 0),
+          status: c.status || 'active',
+          createdAt: c.created_at || new Date().toISOString(),
+        }));
+        this.saveClients(mappedClients);
+      }
+
+      // 2. Fetch suppliers
+      const { data: dbSuppliers } = await client.from('suppliers').select('*');
+      if (dbSuppliers && dbSuppliers.length > 0) {
+        const mappedSuppliers: Supplier[] = dbSuppliers.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          companyName: s.company_name || s.name,
+          category: s.category || 'Printing',
+          phone: s.phone || '',
+          email: s.email || '',
+          address: s.address || '',
+          bankDetails: s.bank_details,
+          totalPurchased: Number(s.total_purchased || 0),
+          totalPaid: Number(s.total_paid || 0),
+          payableLiability: Number(s.payable_liability || 0),
+          creditTermDays: Number(s.credit_term_days || 30),
+          status: s.status || 'active',
+          createdAt: s.created_at || new Date().toISOString(),
+        }));
+        this.saveSuppliers(mappedSuppliers);
+      }
+
+      // 3. Fetch quotations
+      const { data: dbQuotations } = await client.from('quotations').select('*');
+      if (dbQuotations && dbQuotations.length > 0) {
+        const mappedQuotations: Quotation[] = dbQuotations.map((q: any) => ({
+          id: q.id,
+          quotationNumber: q.quotation_number,
+          clientId: q.client_id,
+          clientName: q.client_name,
+          clientCompany: q.client_company,
+          date: q.date,
+          validityDate: q.validity_date,
+          subject: q.subject,
+          items: typeof q.items_json === 'string' ? JSON.parse(q.items_json) : (q.items_json || []),
+          subtotal: Number(q.subtotal || 0),
+          agencyCommissionPercent: Number(q.agency_commission_percent || 10),
+          agencyCommissionAmount: Number(q.agency_commission_amount || 0),
+          vatPercent: Number(q.vat_percent || 0),
+          vatAmount: Number(q.vat_amount || 0),
+          total: Number(q.total || 0),
+          advance: Number(q.advance || 0),
+          due: Number(q.due || 0),
+          nbText: q.nb_text,
+          terms: typeof q.terms_json === 'string' ? JSON.parse(q.terms_json) : (q.terms_json || []),
+          signatoryName: q.signatory_name || 'Alal Uddin',
+          signatoryTitle: q.signatory_title || 'Chief Executive Officer (CEO)',
+          signatoryPhone: q.signatory_phone || '+88 01819 312820',
+          status: q.status || 'Draft',
+          createdAt: q.created_at || new Date().toISOString(),
+        }));
+        this.saveQuotations(mappedQuotations);
+      }
+
+      return {
+        success: true,
+        message: 'Successfully synchronized data from Supabase PostgreSQL cloud!',
+        counts: {
+          clients: dbClients?.length || 0,
+          suppliers: dbSuppliers?.length || 0,
+          quotations: dbQuotations?.length || 0,
+        },
+      };
+    } catch (err: any) {
+      console.error('Supabase sync error:', err);
+      return { success: false, message: err?.message || 'Sync failed' };
+    }
   }
 
   // Backup & Restore
