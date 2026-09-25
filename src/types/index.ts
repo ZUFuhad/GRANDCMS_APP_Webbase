@@ -15,6 +15,8 @@ export interface Quotation {
   clientName: string;
   clientCompany?: string;
   clientAddress?: string;
+  clientPhone?: string;
+  clientEmail?: string;
   subject: string;
   items: QuotationItem[];
   subtotal: number;
@@ -150,9 +152,37 @@ export interface AIClientProspect {
   companyName: string;
   industry: string;
   contactPerson: string;
+  mobileNumber: string;
+  email?: string;
+  location?: string;
   estimatedBudget: number;
   recommendedService: string;
+  triggerEvent?: string;
+  priority?: 'High' | 'Medium' | 'Low';
+  source?: 'AI Radar' | 'Manual' | 'Market Intelligence';
   status: 'New Lead' | 'Contacted' | 'Proposal Sent' | 'Won';
+  createdAt?: string;
+}
+
+export interface MonitoredCompany {
+  id: string;
+  companyName: string;
+  industry: string;
+  focusArea: string;
+  contactPerson?: string;
+  mobileNumber?: string;
+  status: 'Monitoring' | 'Signal Detected' | 'Paused';
+  lastChecked: string;
+  signalNotes?: string;
+}
+
+export interface ProspectChatMessage {
+  id: string;
+  sender: 'user' | 'ai';
+  text: string;
+  timestamp: string;
+  suggestedLead?: Partial<AIClientProspect>;
+  monitoredCompany?: Partial<MonitoredCompany>;
 }
 
 export interface UserSession {

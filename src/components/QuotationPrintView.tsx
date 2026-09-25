@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Quotation, Invoice } from '../types';
 import { GrandLogo } from './GrandLogo';
+import { LogoUploadModal } from './LogoUploadModal';
 import { GRAND_COMPANY_INFO } from '../mock/initialData';
-import { Printer, Download, CheckCircle2, X, MessageSquare } from 'lucide-react';
+import grandLogoPng from '../assets/grand-logo.png';
+import { Printer, Download, CheckCircle2, X, MessageSquare, Upload } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 interface QuotationPrintViewProps {
@@ -18,6 +20,7 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
   onClose,
   onConvertToInvoice,
 }) => {
+  const [isLogoModalOpen, setIsLogoModalOpen] = useState(false);
   const isInvoice = type === 'Invoice';
 
   const formatMoney = (amount: number) => {
@@ -42,13 +45,18 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
     doc.text(type.toUpperCase(), 55, 63);
 
     // Company Header Right
-    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.setFontSize(14);
-    doc.text('GRAND', 440, 52);
-    doc.setFontSize(8.5);
-    doc.setTextColor(100, 100, 100);
-    doc.text('we value what you have to say!', 380, 64);
-    doc.text('EST. 2004', 442, 74);
+    try {
+      const activeLogo = localStorage.getItem('grand_custom_logo') || grandLogoPng;
+      doc.addImage(activeLogo, 'PNG', 430, 36, 125, 52);
+    } catch {
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.setFontSize(14);
+      doc.text('GRAND', 440, 52);
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 100, 100);
+      doc.text('we value what you have to say!', 380, 64);
+      doc.text('EST. 2004', 442, 74);
+    }
 
     // Date & Validity
     doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
@@ -279,7 +287,16 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
               </div>
 
               <div className="flex flex-col items-start sm:items-end">
-                <GrandLogo size="md" variant="gold" />
+                <GrandLogo size="md" variant="gold" onClick={() => setIsLogoModalOpen(true)} />
+                <button
+                  type="button"
+                  onClick={() => setIsLogoModalOpen(true)}
+                  className="print:hidden text-[10px] text-amber-700 hover:text-amber-900 font-semibold underline mt-0.5 cursor-pointer flex items-center gap-1"
+                  title="Upload grand-logo.png"
+                >
+                  <Upload className="w-2.5 h-2.5" />
+                  <span>Change Logo</span>
+                </button>
                 <div className="text-[11px] text-slate-600 mt-1 text-left sm:text-right font-medium">
                   {GRAND_COMPANY_INFO.addressLine1}, {GRAND_COMPANY_INFO.addressLine2}<br />
                   Phone: {GRAND_COMPANY_INFO.phone1}, {GRAND_COMPANY_INFO.phone2}<br />
@@ -504,6 +521,11 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
           </div>
         </div>
       </div>
+
+      <LogoUploadModal
+        isOpen={isLogoModalOpen}
+        onClose={() => setIsLogoModalOpen(false)}
+      />
     </div>
   );
 };

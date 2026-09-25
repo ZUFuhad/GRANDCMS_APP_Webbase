@@ -11,7 +11,8 @@ import {
   saveNotifications,
   saveAiProspects,
 } from './services/storage';
-import { Quotation, Invoice, Client, Supplier, AppNotification } from './types';
+import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect } from './types';
+import { DEFAULT_TERMS } from './mock/initialData';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
@@ -148,6 +149,77 @@ export function App() {
     });
   };
 
+  const handleSaveProspect = (p: AIClientProspect) => {
+    const exists = data.aiProspects.some((item: AIClientProspect) => item.id === p.id);
+    const updated = exists
+      ? data.aiProspects.map((item: AIClientProspect) => (item.id === p.id ? p : item))
+      : [p, ...data.aiProspects];
+
+    setData({
+      ...data,
+      aiProspects: updated,
+    });
+  };
+
+  const handleDeleteProspect = (id: string) => {
+    setData({
+      ...data,
+      aiProspects: data.aiProspects.filter((p: AIClientProspect) => p.id !== id),
+    });
+  };
+
+  const handleConvertLeadToQuotation = (lead: AIClientProspect) => {
+    const nextNum = String(data.quotations.length + 1).padStart(3, '0');
+    const newQuotation: Quotation = {
+      id: `quot-${Date.now()}`,
+      quotationNumber: `GCMS/QT/2026/${nextNum}`,
+      date: new Date().toISOString().split('T')[0],
+      validityDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+      clientName: lead.contactPerson,
+      clientCompany: lead.companyName,
+      clientAddress: lead.location || 'Chattogram, Bangladesh',
+      clientPhone: lead.mobileNumber,
+      clientEmail: lead.email || '',
+      subject: `Proposal for ${lead.recommendedService}`,
+      items: [
+        {
+          id: `qi-${Date.now()}`,
+          job: lead.recommendedService.slice(0, 30),
+          description: `${lead.recommendedService} for ${lead.companyName}`,
+          quantity: 1,
+          unitPrice: lead.estimatedBudget,
+          total: lead.estimatedBudget,
+        },
+      ],
+      subtotal: lead.estimatedBudget,
+      agencyCommissionPercent: 10,
+      agencyCommissionAmount: Math.round(lead.estimatedBudget * 0.1),
+      vatPercent: 0,
+      vatAmount: 0,
+      total: Math.round(lead.estimatedBudget * 1.1),
+      advance: 0,
+      due: Math.round(lead.estimatedBudget * 1.1),
+      termsAndConditions: DEFAULT_TERMS,
+      nbText: 'Chittagong',
+      signatoryName: 'Zahir Uddin Fuhad',
+      signatoryTitle: 'CEO & Founder',
+      signatoryPhone: '01819312820',
+      status: 'Draft',
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+
+    const updatedProspects = data.aiProspects.map((item: AIClientProspect) =>
+      item.id === lead.id ? { ...item, status: 'Proposal Sent' as const } : item
+    );
+
+    setData({
+      ...data,
+      aiProspects: updatedProspects,
+      quotations: [newQuotation, ...data.quotations],
+    });
+    setActiveTab('quotations');
+  };
+
   const handleMarkNotificationsRead = () => {
     setData({
       ...data,
@@ -236,7 +308,14 @@ export function App() {
             <ExpensesLiabilities expenses={data.expenses} liabilities={data.liabilities} />
           )}
 
-          {activeTab === 'agentic' && <AgenticGrowth prospects={data.aiProspects} />}
+          {activeTab === 'agentic' && (
+            <AgenticGrowth
+              prospects={data.aiProspects}
+              onSaveProspect={handleSaveProspect}
+              onDeleteProspect={handleDeleteProspect}
+              onConvertToQuotation={handleConvertLeadToQuotation}
+            />
+          )}
 
           {activeTab === 'generator' && <AIDesignGenerator />}
         </main>

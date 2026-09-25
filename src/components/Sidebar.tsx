@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   LayoutDashboard,
   FileText,
@@ -9,8 +9,10 @@ import {
   TrendingUp,
   Sparkles,
   LogOut,
+  Upload,
 } from 'lucide-react';
 import { GrandLogo } from './GrandLogo';
+import { LogoUploadModal } from './LogoUploadModal';
 
 interface SidebarProps {
   activeTab: string;
@@ -19,6 +21,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout }) => {
+  const [isLogoModalOpen, setIsLogoModalOpen] = useState(false);
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'quotations', label: 'Quotations', icon: FileText },
@@ -31,14 +34,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
   ];
 
   return (
-    <aside className="w-64 bg-[#0B192C] text-slate-300 flex flex-col h-screen sticky top-0 border-r border-slate-800 shrink-0 select-none">
+    <aside
+      style={{ width: '16rem', minWidth: '16rem' }}
+      className="w-64 bg-[#0B192C] text-slate-300 flex flex-col h-screen sticky top-0 border-r border-slate-800 shrink-0 select-none"
+    >
       {/* Brand Header */}
-      <div className="p-5 border-b border-slate-800 flex flex-col items-center justify-center text-center bg-[#07101C]">
-        <GrandLogo size="sm" variant="gold" />
+      <div className="p-4 border-b border-slate-800 flex flex-col items-center justify-center text-center bg-[#07101C]">
+        <GrandLogo size="md" variant="gold" onClick={() => setIsLogoModalOpen(true)} />
         <h2 className="text-xs font-bold text-amber-400 mt-2 tracking-wider">
           GRAND COMMUNICATION & MARKETING
         </h2>
+        <button
+          onClick={() => setIsLogoModalOpen(true)}
+          className="mt-2 text-[10px] font-medium text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 px-2.5 py-1 rounded-full flex items-center gap-1.5 transition cursor-pointer"
+          title="Change or upload grand-logo.png"
+        >
+          <Upload className="w-3 h-3 text-amber-400" />
+          <span>Change / Upload Logo</span>
+        </button>
       </div>
+
+      <LogoUploadModal
+        isOpen={isLogoModalOpen}
+        onClose={() => setIsLogoModalOpen(false)}
+      />
 
       {/* Nav Menu */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
