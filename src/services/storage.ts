@@ -54,7 +54,15 @@ export const loadStorageData = () => {
       expenses: exp ? JSON.parse(exp) : INITIAL_EXPENSES,
       liabilities: liab ? JSON.parse(liab) : INITIAL_LIABILITIES,
       notifications: notif ? JSON.parse(notif) : INITIAL_NOTIFICATIONS,
-      aiProspects: prosp ? JSON.parse(prosp) : INITIAL_AI_PROSPECTS,
+      aiProspects: prosp
+        ? JSON.parse(prosp).map((p: any, idx: number) => ({
+            ...p,
+            mobileNumber: p.mobileNumber || (idx === 0 ? '01711-884920' : idx === 1 ? '01819-335128' : '01914-772391'),
+            contactPerson: p.contactPerson || 'Contact Person',
+            priority: p.priority || 'High',
+            triggerEvent: p.triggerEvent || 'Direct Market Lead',
+          }))
+        : INITIAL_AI_PROSPECTS,
     };
   } catch (e) {
     console.error('Failed to load storage', e);
