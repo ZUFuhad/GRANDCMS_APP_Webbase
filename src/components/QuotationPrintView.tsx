@@ -2,7 +2,7 @@ import React from 'react';
 import { Quotation, Invoice } from '../types';
 import { GrandLogo } from './GrandLogo';
 import { GRAND_COMPANY_INFO } from '../mock/initialData';
-import { Printer, Download, FileText, CheckCircle2, X } from 'lucide-react';
+import { Printer, Download, CheckCircle2, X, MessageSquare } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 interface QuotationPrintViewProps {
@@ -28,175 +28,96 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
     window.print();
   };
 
-  const handleDownloadDoc = () => {
-    const htmlContent = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head>
-        <title>${type} - ${document.clientName}</title>
-        <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 20px; }
-          .header-title { background: #8B4513; color: white; padding: 8px 24px; display: inline-block; font-size: 24px; font-weight: bold; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #333; padding: 8px; font-size: 13px; }
-          th { background: #f1f5f9; }
-          .text-right { text-align: right; }
-          .terms { font-size: 11px; margin-top: 15px; }
-        </style>
-      </head>
-      <body>
-        <div style="display:flex; justify-content:space-between;">
-          <div class="header-title">${type.toUpperCase()}</div>
-          <div style="text-align:right;">
-            <h2>GRAND Communication & Marketing</h2>
-            <p>20 No Shop CDA Market, Kazir Dewri, Chattogram</p>
-          </div>
-        </div>
-        <p><strong>TO:</strong> ${document.clientName} (${document.clientCompany || ''})</p>
-        <p><strong>Date:</strong> ${document.date}</p>
-        <p><strong>Subject:</strong> ${document.subject}</p>
-        <table>
-          <thead>
-            <tr>
-              <th>SL</th><th>Job</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${document.items
-              .map(
-                (item, idx) => `
-              <tr>
-                <td>${idx + 1}.</td>
-                <td><strong>${item.job}</strong></td>
-                <td>${item.description.replace(/\n/g, '<br/>')}</td>
-                <td style="text-align:center;">${item.quantity}</td>
-                <td class="text-right">${item.unitPrice}/-</td>
-                <td class="text-right"><strong>${item.total.toLocaleString()}/-</strong></td>
-              </tr>
-            `,
-              )
-              .join('')}
-          </tbody>
-        </table>
-        <div style="margin-top:20px; text-align:right;">
-          <p>Subtotal: ${formatMoney(document.subtotal)}</p>
-          <p>Total: <strong>${formatMoney(document.total)}</strong></p>
-          <p>Advance: ${formatMoney(document.advance)}</p>
-          <p>Due: <strong>${formatMoney(document.due)}</strong></p>
-        </div>
-        <div class="terms">
-          <h4>Terms & Conditions:</h4>
-          <ol>
-            ${document.termsAndConditions.map((t) => `<li>${t}</li>`).join('')}
-          </ol>
-        </div>
-        <br/><br/>
-        <p><strong>${document.signatoryName || GRAND_COMPANY_INFO.defaultSignatory.name}</strong><br/>${document.signatoryTitle || GRAND_COMPANY_INFO.defaultSignatory.title}<br/>Cell # ${document.signatoryPhone || GRAND_COMPANY_INFO.defaultSignatory.phone}</p>
-      </body>
-      </html>
-    `;
-
-    const blob = new Blob(['\ufeff', htmlContent], {
-      type: 'application/msword',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = window.document.createElement('a');
-    a.href = url;
-    a.download = `${type}_${document.clientName.replace(/\s+/g, '_')}_${document.date}.doc`;
-    window.document.body.appendChild(a);
-    a.click();
-    window.document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDownloadPdf = () => {
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'pt',
-      format: 'a4',
-    });
-
-    const primaryColor = [184, 115, 51]; // warm bronze gold
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF('p', 'pt', 'a4');
+    const primaryColor = [200, 142, 19];
     const darkColor = [30, 41, 59];
 
-    // Top Header Banner
-    doc.setFillColor(154, 76, 23); // brown/amber header from Grand invoice
-    doc.rect(40, 40, 160, 36, 'F');
+    // Header Top Banner
+    doc.setFillColor(139, 69, 19);
+    doc.rect(40, 40, 160, 34, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(20);
-    doc.text(type, 65, 65);
+    doc.setFontSize(18);
+    doc.text(type.toUpperCase(), 55, 63);
 
-    // Company Header
+    // Company Header Right
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.setFontSize(16);
-    doc.text('GRAND', 430, 55);
-    doc.setFontSize(9);
-    doc.setTextColor(120, 120, 120);
-    doc.text('we value what you have to say!', 380, 68);
-    doc.text('EST. 2004', 440, 78);
+    doc.setFontSize(14);
+    doc.text('GRAND', 440, 52);
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 100, 100);
+    doc.text('we value what you have to say!', 380, 64);
+    doc.text('EST. 2004', 442, 74);
 
-    // Client and Date
+    // Date & Validity
     doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-
-    doc.text(`Date - ${document.date}`, 430, 105);
+    doc.setFontSize(9.5);
+    doc.text(`Date - ${document.date}`, 430, 102);
     if ('validityDate' in document && (document as Quotation).validityDate) {
-      doc.text(`Quotation Validity Until`, 400, 120);
-      doc.text(`${(document as Quotation).validityDate}`, 430, 132);
+      doc.text(`Quotation Validity Until`, 400, 116);
+      doc.text(`${(document as Quotation).validityDate}`, 430, 128);
     }
 
+    // TO (Client Details - Ensuring Client Address is displayed correctly, NOT company address)
     doc.setFont('helvetica', 'bold');
-    doc.text('TO', 40, 110);
-    doc.text(`${document.clientName}`, 40, 124);
+    doc.setFontSize(10);
+    doc.text('TO', 40, 102);
+    doc.text(`${document.clientName}`, 40, 116);
+    doc.setFont('helvetica', 'normal');
     if (document.clientCompany && document.clientCompany !== document.clientName) {
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${document.clientCompany}`, 40, 136);
+      doc.text(`${document.clientCompany}`, 40, 128);
+    }
+    if (document.clientAddress) {
+      const splitAddr = doc.splitTextToSize(document.clientAddress, 220);
+      doc.text(splitAddr, 40, 140);
     }
 
     // Subject
+    let yPos = 175;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text(document.subject, 180, 165);
+    doc.setFontSize(10.5);
+    doc.text(`Quotation for – ${document.subject}`, 40, yPos);
 
     // Table Header
-    let yPos = 185;
+    yPos += 15;
     doc.setFillColor(241, 245, 249);
-    doc.rect(40, yPos, 515, 24, 'F');
+    doc.rect(40, yPos, 515, 22, 'F');
     doc.setDrawColor(200, 200, 200);
-    doc.rect(40, yPos, 515, 24, 'S');
+    doc.rect(40, yPos, 515, 22, 'S');
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.text('SL', 45, yPos + 16);
-    doc.text('Job', 75, yPos + 16);
-    doc.text('Description', 145, yPos + 16);
-    doc.text('Qty', 370, yPos + 16);
-    doc.text('Unit Price', 420, yPos + 16);
-    doc.text('Total', 495, yPos + 16);
+    doc.text('SL', 45, yPos + 15);
+    doc.text('Job', 75, yPos + 15);
+    doc.text('Description', 145, yPos + 15);
+    doc.text('Qty', 370, yPos + 15);
+    doc.text('Unit Price', 420, yPos + 15);
+    doc.text('Total', 495, yPos + 15);
 
-    yPos += 24;
+    yPos += 22;
 
     // Table Rows
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
 
     document.items.forEach((item, index) => {
-      const rowHeight = 36;
+      const rowHeight = 34;
       doc.rect(40, yPos, 515, rowHeight, 'S');
 
-      doc.text(`${index + 1}.`, 45, yPos + 16);
+      doc.text(`${index + 1}.`, 45, yPos + 14);
       doc.setFont('helvetica', 'bold');
-      doc.text(item.job, 75, yPos + 16);
+      doc.text(item.job, 75, yPos + 14);
       doc.setFont('helvetica', 'normal');
 
       const descLines = doc.splitTextToSize(item.description, 210);
-      doc.text(descLines, 145, yPos + 14);
+      doc.text(descLines, 145, yPos + 13);
 
-      doc.text(`${item.quantity}`, 375, yPos + 18);
-      doc.text(`${item.unitPrice}/-`, 425, yPos + 18);
+      doc.text(`${item.quantity}`, 375, yPos + 16);
+      doc.text(`${item.unitPrice}/-`, 425, yPos + 16);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${item.total.toLocaleString()}`, 495, yPos + 18);
+      doc.text(`${item.total.toLocaleString()}`, 495, yPos + 16);
       doc.setFont('helvetica', 'normal');
 
       yPos += rowHeight;
@@ -205,30 +126,30 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
     // Subtotal Row
     doc.rect(40, yPos, 515, 20, 'S');
     doc.setFont('helvetica', 'bold');
-    doc.text('Subtotal', 425, yPos + 14);
+    doc.text('Subtotal', 430, yPos + 14);
     doc.text(`${formatMoney(document.subtotal)}`, 485, yPos + 14);
-    yPos += 20;
+    yPos += 24;
 
     // N.B text
     if (document.nbText) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
-      doc.text(`N.B : ${document.nbText}`, 40, yPos + 16);
+      doc.text(`N.B : ${document.nbText}`, 40, yPos + 10);
     }
 
-    // Calculations Summary Box (Right) & Terms (Left)
-    const termsStartY = yPos + 30;
+    // Terms & Conditions (Left) & Calculations (Right)
+    const termsStartY = yPos + 15;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.text('Terms & Condition:', 40, termsStartY);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    let termY = termsStartY + 14;
+    let termY = termsStartY + 12;
     document.termsAndConditions.slice(0, 8).forEach((term, idx) => {
       const splitTerm = doc.splitTextToSize(`${idx + 1}. ${term}`, 250);
       doc.text(splitTerm, 40, termY);
-      termY += splitTerm.length * 10 + 2;
+      termY += splitTerm.length * 9 + 2;
     });
 
     // Right Summary Box
@@ -237,12 +158,17 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
     const valX = 490;
 
     const summaryRows = [
-      { label: `Agency Commission(10%)`, val: `${formatMoney((document as Quotation).agencyCommissionAmount || 16200)}` },
-      { label: `VAT(0%)`, val: `${formatMoney((document as Quotation).vatAmount || 0)}` },
-      { label: `Total`, val: `${formatMoney(document.total)}`, bold: true },
-      { label: `Advance`, val: `${formatMoney(document.advance)}` },
-      { label: `Due`, val: `${formatMoney(document.due)}`, bold: true },
+      { label: `Agency Commission(${document.agencyCommissionPercent || 10}%)`, val: `${formatMoney(document.agencyCommissionAmount || 0)}` },
+      { label: `VAT(${document.vatPercent || 0}%)`, val: `${formatMoney(document.vatAmount || 0)}` },
+      { label: `Total Amount`, val: `${formatMoney(document.total)}`, bold: true },
     ];
+
+    if (isInvoice) {
+      summaryRows.push(
+        { label: `Advance Paid`, val: `${formatMoney(document.advance)}` },
+        { label: `Due Balance`, val: `${formatMoney(document.due)}`, bold: true }
+      );
+    }
 
     summaryRows.forEach((r) => {
       doc.rect(rightBoxX, sumY, 225, 18, 'S');
@@ -254,7 +180,7 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
     });
 
     // Signatory
-    const sigY = termY + 25;
+    const sigY = Math.max(termY + 15, sumY + 20);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.text(document.signatoryName || GRAND_COMPANY_INFO.defaultSignatory.name, 40, sigY);
@@ -274,61 +200,66 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
     doc.save(`${type}_${document.clientName}_${document.date}.pdf`);
   };
 
+  const handleSendWhatsApp = () => {
+    const docNo = 'quotationNumber' in document ? (document as Quotation).quotationNumber : (document as Invoice).invoiceNumber;
+    let textStr = `*GRAND Communication & Marketing*\n*${type.toUpperCase()}: ${docNo}*\n\nClient: ${document.clientName} (${document.clientCompany || ''})\nSubject: ${document.subject}\nDate: ${document.date}\n\n*Total Amount:* ৳ ${document.total.toLocaleString()}/-`;
+    if (isInvoice) {
+      textStr += `\n*Advance Paid:* ৳ ${document.advance.toLocaleString()}/-\n*Due Balance:* ৳ ${document.due.toLocaleString()}/-`;
+    }
+    textStr += `\n\nThank you for choosing Grand Communication & Marketing!`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(textStr)}`, '_blank');
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0B192C]/85 backdrop-blur-xs flex justify-center p-2 sm:p-6 print:p-0 print:bg-white print:fixed-none">
       <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden print:shadow-none print:rounded-none flex flex-col">
-        {/* Top Control Bar (Hidden when printing) */}
-        <div className="bg-[#0B192C] px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b border-blue-950/40 print:hidden text-white">
-          <div className="flex items-center gap-3">
-            <span className="px-3 py-1 text-xs font-bold uppercase rounded-md bg-blue-500/20 text-blue-200 border border-blue-400/30">
-              {type} Document
+        {/* Modal Action Bar (Hidden on print) */}
+        <div className="bg-[#0B192C] text-white px-4 py-3 flex items-center justify-between print:hidden">
+          <div className="flex items-center gap-2">
+            <span className="bg-amber-500 text-slate-950 font-bold px-2.5 py-1 rounded text-xs">
+              {type} Preview
             </span>
-            <span className="font-semibold text-sm text-slate-200">
-              {document.clientName} &bull; {document.date}
+            <span className="text-sm text-slate-300 font-medium">
+              {'quotationNumber' in document ? (document as Quotation).quotationNumber : (document as Invoice).invoiceNumber}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleSendWhatsApp}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              title="Send details instantly via WhatsApp"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              WhatsApp
+            </button>
             {!isInvoice && onConvertToInvoice && (
               <button
                 onClick={() => onConvertToInvoice(document as Quotation)}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                title="Convert this quotation directly into an official invoice"
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Convert to Invoice
               </button>
             )}
-
             <button
-              onClick={handlePrint}
-              className="px-3 py-1.5 bg-[#1E3E62] hover:bg-[#28527a] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              Print / Save PDF
-            </button>
-
-            <button
-              onClick={handleDownloadPdf}
-              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 border border-white/20 transition-all cursor-pointer"
+              onClick={handleDownloadPDF}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
-              Direct .PDF
+              Download PDF
             </button>
-
             <button
-              onClick={handleDownloadDoc}
-              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 border border-white/20 transition-all cursor-pointer"
+              onClick={handlePrint}
+              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
             >
-              <FileText className="w-3.5 h-3.5" />
-              Word (.DOC)
+              <Printer className="w-3.5 h-3.5" />
+              Print
             </button>
-
             {onClose && (
               <button
                 onClick={onClose}
-                className="p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg ml-2 cursor-pointer"
-                aria-label="Close Preview"
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer ml-2"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -336,121 +267,115 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
           </div>
         </div>
 
-        {/* --- AUTHENTIC GRAND LETTERHEAD DOCUMENT CANVAS --- */}
-        <div className="p-6 sm:p-12 relative bg-white min-h-[1050px] font-sans text-slate-900 selection:bg-amber-100 flex flex-col justify-between print:min-h-0 print:p-8">
-          {/* Subtle Royal Watermark in Background */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.035] select-none z-0">
-            <GrandLogo size="xl" showTagline={false} />
-          </div>
-
-          <div className="relative z-10">
-            {/* --- HEADER --- */}
-            <div className="flex justify-between items-start mb-6">
-              {/* Left Ribbon Box */}
-              <div>
-                <div className="bg-[#8B4513] text-white px-8 py-2.5 rounded-none font-serif text-2xl font-bold tracking-wide shadow-sm inline-block">
+        {/* Printable Document Sheet */}
+        <div className="p-6 sm:p-10 bg-white text-slate-900 flex-1 flex flex-col justify-between print:p-6 print:m-0">
+          <div>
+            {/* Top Header Section */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b-2 border-slate-900">
+              <div className="bg-[#8B4513] text-white px-6 py-2.5 rounded shadow-sm">
+                <h1 className="text-xl sm:text-2xl font-black tracking-widest uppercase">
                   {type}
+                </h1>
+              </div>
+
+              <div className="flex flex-col items-start sm:items-end">
+                <GrandLogo size="md" variant="gold" />
+                <div className="text-[11px] text-slate-600 mt-1 text-left sm:text-right font-medium">
+                  {GRAND_COMPANY_INFO.addressLine1}, {GRAND_COMPANY_INFO.addressLine2}<br />
+                  Phone: {GRAND_COMPANY_INFO.phone1}, {GRAND_COMPANY_INFO.phone2}<br />
+                  Email: {GRAND_COMPANY_INFO.email}
                 </div>
               </div>
-
-              {/* Right Grand Brand Logo */}
-              <div className="text-right flex flex-col items-end">
-                <GrandLogo size="md" variant="gold" showTagline={true} />
-              </div>
             </div>
 
-            {/* --- METADATA (TO & DATE) --- */}
-            <div className="flex justify-between items-start text-sm mb-4">
-              <div className="max-w-[50%]">
-                <span className="font-bold text-slate-800 block text-xs tracking-wider uppercase mb-1">
+            {/* Client TO & Date / Validity Section */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 my-6 text-xs">
+              <div>
+                <span className="font-extrabold text-slate-900 uppercase tracking-wider block mb-1">
                   TO
                 </span>
-                <p className="font-bold text-slate-900 text-base leading-tight">
+                <div className="font-bold text-slate-900 text-sm">
                   {document.clientName}
-                </p>
+                </div>
                 {document.clientCompany && document.clientCompany !== document.clientName && (
-                  <p className="text-slate-600 text-xs mt-0.5">{document.clientCompany}</p>
+                  <div className="text-slate-700 font-medium">
+                    {document.clientCompany}
+                  </div>
                 )}
                 {document.clientAddress && (
-                  <p className="text-slate-500 text-xs mt-0.5 leading-snug">{document.clientAddress}</p>
+                  <div className="text-slate-600 mt-0.5 whitespace-pre-line leading-snug">
+                    {document.clientAddress}
+                  </div>
                 )}
               </div>
 
-              <div className="text-right text-xs space-y-1">
-                <p className="font-medium text-slate-800">
-                  <span className="font-bold">Date - </span>
-                  {document.date}
-                </p>
-                {!isInvoice && 'validityDate' in document && (document as Quotation).validityDate && (
+              <div className="sm:text-right space-y-1">
+                <div>
+                  <span className="font-semibold text-slate-600">Date:</span>{' '}
+                  <span className="font-bold text-slate-900">{document.date}</span>
+                </div>
+                {'validityDate' in document && (document as Quotation).validityDate && (
                   <div>
-                    <span className="font-bold text-slate-700 block">
-                      Quotation Validity Until
-                    </span>
-                    <span className="text-slate-900 font-medium">
-                      {(document as Quotation).validityDate}
-                    </span>
+                    <span className="font-semibold text-slate-600">Quotation Validity Until:</span>{' '}
+                    <span className="font-bold text-slate-900">{(document as Quotation).validityDate}</span>
                   </div>
                 )}
-                {isInvoice && 'invoiceNumber' in document && (
+                {'invoiceNumber' in document && (
                   <div>
-                    <span className="font-bold text-slate-700">Invoice No: </span>
-                    <span className="text-amber-800 font-bold">
-                      {(document as Invoice).invoiceNumber}
-                    </span>
+                    <span className="font-semibold text-slate-600">Invoice No:</span>{' '}
+                    <span className="font-bold text-slate-900">{(document as Invoice).invoiceNumber}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* --- SUBJECT / TITLE --- */}
-            <div className="text-center my-4 py-1.5 border-t border-b border-slate-200">
-              <h2 className="text-sm sm:text-base font-semibold text-slate-900">
-                {document.subject}
-              </h2>
+            {/* Subject Line */}
+            <div className="mb-4 bg-slate-50 border-l-4 border-[#8B4513] px-3 py-2 text-xs font-bold text-slate-900">
+              Quotation for – {document.subject}
             </div>
 
-            {/* --- LINE ITEMS TABLE --- */}
-            <div className="overflow-x-auto my-3">
-              <table className="w-full text-xs sm:text-sm border-collapse border border-slate-400">
+            {/* Items Table */}
+            <div className="overflow-x-auto my-4">
+              <table className="w-full text-xs border-collapse border border-slate-400">
                 <thead>
-                  <tr className="bg-slate-100 text-slate-900 text-center font-bold border-b border-slate-400">
-                    <th className="border border-slate-400 px-2 py-2 w-10">SL</th>
-                    <th className="border border-slate-400 px-3 py-2 w-28 text-left">Job</th>
-                    <th className="border border-slate-400 px-4 py-2 text-left">Description</th>
-                    <th className="border border-slate-400 px-2 py-2 w-16">Qty</th>
-                    <th className="border border-slate-400 px-3 py-2 w-24 text-right">Unit Price</th>
-                    <th className="border border-slate-400 px-3 py-2 w-28 text-right">Total</th>
+                  <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-400">
+                    <th className="p-2 text-center w-10 border-r border-slate-400">SL</th>
+                    <th className="p-2 text-left w-28 border-r border-slate-400">Job</th>
+                    <th className="p-2 text-left border-r border-slate-400">Description</th>
+                    <th className="p-2 text-center w-16 border-r border-slate-400">Qty</th>
+                    <th className="p-2 text-right w-24 border-r border-slate-400">Unit Price</th>
+                    <th className="p-2 text-right w-28">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {document.items.map((item, index) => (
-                    <tr key={item.id || index} className="align-top border-b border-slate-400">
-                      <td className="border border-slate-400 px-2 py-2.5 text-center font-medium">
-                        {index + 1}.
+                  {document.items.map((item, idx) => (
+                    <tr key={item.id || idx} className="border-b border-slate-300 align-top">
+                      <td className="p-2 text-center border-r border-slate-300 font-medium">
+                        {idx + 1}.
                       </td>
-                      <td className="border border-slate-400 px-3 py-2.5 font-bold text-slate-900">
+                      <td className="p-2 border-r border-slate-300 font-bold text-slate-900">
                         {item.job}
                       </td>
-                      <td className="border border-slate-400 px-4 py-2.5 text-slate-800 whitespace-pre-line leading-relaxed">
+                      <td className="p-2 border-r border-slate-300 text-slate-700 whitespace-pre-line leading-relaxed">
                         {item.description}
                       </td>
-                      <td className="border border-slate-400 px-2 py-2.5 text-center font-semibold">
+                      <td className="p-2 text-center border-r border-slate-300 font-medium">
                         {item.quantity}
                       </td>
-                      <td className="border border-slate-400 px-3 py-2.5 text-right font-medium text-slate-800">
-                        {item.unitPrice}/-
+                      <td className="p-2 text-right border-r border-slate-300 font-medium">
+                        {item.unitPrice.toLocaleString()}/-
                       </td>
-                      <td className="border border-slate-400 px-3 py-2.5 text-right font-bold text-slate-900">
-                        {item.total.toLocaleString('en-IN')}
+                      <td className="p-2 text-right font-bold text-slate-900">
+                        {item.total.toLocaleString()}/-
                       </td>
                     </tr>
                   ))}
-                  {/* Subtotal Row inside Table */}
-                  <tr className="font-bold bg-slate-50 border-t border-slate-400">
-                    <td colSpan={5} className="border border-slate-400 px-4 py-2 text-right">
+                  {/* Subtotal row */}
+                  <tr className="bg-slate-50 font-bold text-slate-900 border-t border-slate-400">
+                    <td colSpan={5} className="p-2 text-right border-r border-slate-400">
                       Subtotal
                     </td>
-                    <td className="border border-slate-400 px-3 py-2 text-right text-slate-900">
+                    <td className="p-2 text-right">
                       {formatMoney(document.subtotal)}
                     </td>
                   </tr>
@@ -458,16 +383,15 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
               </table>
             </div>
 
-            {/* --- N.B. NOTE --- */}
+            {/* N.B Note */}
             {document.nbText && (
-              <p className="text-xs font-bold text-slate-800 my-2">
+              <p className="text-xs font-bold text-slate-900 my-2">
                 N.B : <span className="font-semibold text-slate-700">{document.nbText}</span>
               </p>
             )}
 
-            {/* --- BOTTOM SECTION: TERMS (LEFT) & CALCULATIONS (RIGHT) --- */}
+            {/* Terms & Calculations Summary */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 my-4">
-              {/* Left Column: Terms & Conditions */}
               <div className="md:col-span-7 text-xs text-slate-800 space-y-1.5">
                 <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wide">
                   Terms & Condition:
@@ -481,17 +405,13 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
                 </ol>
               </div>
 
-              {/* Right Column: Financial Calculations Summary */}
+              {/* Summary Box */}
               <div className="md:col-span-5 flex flex-col justify-start">
                 <table className="w-full text-xs border border-slate-400">
                   <tbody>
                     <tr className="border-b border-slate-300">
                       <td className="px-3 py-1.5 font-medium text-slate-700 bg-slate-50">
-                        Agency Commission(
-                        {'agencyCommissionPercent' in document
-                          ? (document as Quotation).agencyCommissionPercent
-                          : 10}
-                        %)
+                        Agency Commission ({document.agencyCommissionPercent || 10}%)
                       </td>
                       <td className="px-3 py-1.5 text-right font-semibold text-slate-800 border-l border-slate-300">
                         {formatMoney(document.agencyCommissionAmount || 0)}
@@ -499,43 +419,44 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
                     </tr>
                     <tr className="border-b border-slate-300">
                       <td className="px-3 py-1.5 font-medium text-slate-700 bg-slate-50">
-                        VAT(
-                        {'vatPercent' in document ? (document as Quotation).vatPercent : 0}
-                        %)
+                        VAT ({document.vatPercent || 0}%)
                       </td>
                       <td className="px-3 py-1.5 text-right font-semibold text-slate-800 border-l border-slate-300">
                         {formatMoney(document.vatAmount || 0)}
                       </td>
                     </tr>
                     <tr className="border-b border-slate-400 bg-slate-100 font-bold text-slate-900">
-                      <td className="px-3 py-2">Total</td>
+                      <td className="px-3 py-2">Total Amount</td>
                       <td className="px-3 py-2 text-right border-l border-slate-300 text-sm">
                         {formatMoney(document.total)}
                       </td>
                     </tr>
-                    <tr className="border-b border-slate-300">
-                      <td className="px-3 py-1.5 font-medium text-slate-700 bg-slate-50">
-                        Advance
-                      </td>
-                      <td className="px-3 py-1.5 text-right font-semibold text-slate-800 border-l border-slate-300">
-                        {formatMoney(document.advance)}
-                      </td>
-                    </tr>
-                    <tr className="bg-amber-50/60 font-bold text-amber-950">
-                      <td className="px-3 py-2 text-red-700">Due</td>
-                      <td className="px-3 py-2 text-right border-l border-slate-300 text-sm text-red-700">
-                        {formatMoney(document.due)}
-                      </td>
-                    </tr>
+                    {isInvoice && (
+                      <>
+                        <tr className="border-b border-slate-300">
+                          <td className="px-3 py-1.5 font-medium text-slate-700 bg-slate-50">
+                            Advance Paid
+                          </td>
+                          <td className="px-3 py-1.5 text-right font-semibold text-slate-800 border-l border-slate-300">
+                            {formatMoney(document.advance)}
+                          </td>
+                        </tr>
+                        <tr className="bg-amber-50/60 font-bold text-amber-950">
+                          <td className="px-3 py-2 text-red-700">Due Balance</td>
+                          <td className="px-3 py-2 text-right border-l border-slate-300 text-sm text-red-700">
+                            {formatMoney(document.due)}
+                          </td>
+                        </tr>
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
 
-            {/* --- SIGNATURE & AUTHORIZATION --- */}
+            {/* Signature & Authorization */}
             <div className="mt-8 pt-4 flex justify-between items-end">
               <div className="text-xs">
-                {/* Visual signature cursive font */}
                 <div className="font-['Dancing_Script',cursive] text-2xl text-slate-800 mb-1 select-none">
                   {document.signatoryName || GRAND_COMPANY_INFO.defaultSignatory.name}
                 </div>
@@ -553,9 +474,8 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
             </div>
           </div>
 
-          {/* --- FOOTER: QR CODE & CONTACT INFO --- */}
+          {/* Footer QR & Contact */}
           <div className="relative z-10 pt-6 mt-6 border-t border-slate-300 flex flex-wrap justify-between items-center text-xs text-slate-700 gap-4">
-            {/* Left QR & Facebook branding */}
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-slate-900 text-white p-1 rounded flex flex-col justify-center items-center shadow-xs">
                 <div className="grid grid-cols-3 gap-0.5 w-full h-full p-0.5">
@@ -574,20 +494,12 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
                 <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px]">
                   f
                 </span>
-                <span>/grandcommunicationbd</span>
+                <span>Grand Communication & Marketing</span>
               </div>
             </div>
 
-            {/* Right Company Address & Phone */}
-            <div className="text-right text-[11px] leading-tight text-slate-600">
-              <p className="font-bold text-slate-800 text-xs">
-                {GRAND_COMPANY_INFO.addressLine1}
-              </p>
-              <p>{GRAND_COMPANY_INFO.addressLine2}</p>
-              <p className="text-slate-800 font-medium">
-                {GRAND_COMPANY_INFO.phone1} &bull; {GRAND_COMPANY_INFO.phone2}
-              </p>
-              <p className="text-amber-800 font-medium">{GRAND_COMPANY_INFO.email}</p>
+            <div className="text-right text-[11px] text-slate-600">
+              {GRAND_COMPANY_INFO.addressLine1}, {GRAND_COMPANY_INFO.addressLine2} | {GRAND_COMPANY_INFO.phone1} | {GRAND_COMPANY_INFO.email}
             </div>
           </div>
         </div>

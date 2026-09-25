@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { StorageService } from './services/storage';
 import {
-  Quotation,
-  Invoice,
-  Client,
-  Supplier,
-  ProjectSchedule,
-  Expense,
-  FinancialLiability,
-  AIClientProspect,
-  AppNotification,
-  UserSession,
-} from './types';
+  loadStorageData,
+  saveQuotations,
+  saveInvoices,
+  saveClients,
+  saveSuppliers,
+  saveProjects,
+  saveExpenses,
+  saveLiabilities,
+  saveNotifications,
+  saveAiProspects,
+} from './services/storage';
+import { Quotation, Invoice, Client, Supplier, AppNotification } from './types';
+import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
-import { Sidebar, NavTab } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { QuotationModule } from './components/QuotationModule';
 import { InvoiceModule } from './components/InvoiceModule';
@@ -22,444 +22,236 @@ import { ProjectsScheduling } from './components/ProjectsScheduling';
 import { ExpensesLiabilities } from './components/ExpensesLiabilities';
 import { AgenticGrowth } from './components/AgenticGrowth';
 import { AIDesignGenerator } from './components/AIDesignGenerator';
-import { DeploymentHub } from './components/DeploymentHub';
-import { QuotationPrintView } from './components/QuotationPrintView';
 import { AuthView } from './components/AuthView';
-import { MobileSimulatorFrame } from './components/MobileSimulatorFrame';
+import { QuotationPrintView } from './components/QuotationPrintView';
 
-export default function App() {
-  // Session Authentication State
-  const [userSession, setUserSession] = useState<UserSession | null>(() =>
-    StorageService.getUserSession(),
-  );
+export function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
 
-  // View & Navigation State
-  const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
-  const [isMobileSimulator, setIsMobileSimulator] = useState(false);
+  const [data, setData] = useState(loadStorageData());
+  const [previewDoc, setPreviewDoc] = useState<{ document: Quotation | Invoice; type: 'Quotation' | 'Invoice' } | null>(null);
 
-  // Entities State (Synchronized via StorageService)
-  const [quotations, setQuotations] = useState<Quotation[]>(() =>
-    StorageService.getQuotations(),
-  );
-  const [invoices, setInvoices] = useState<Invoice[]>(() =>
-    StorageService.getInvoices(),
-  );
-  const [clients, setClients] = useState<Client[]>(() =>
-    StorageService.getClients(),
-  );
-  const [suppliers, setSuppliers] = useState<Supplier[]>(() =>
-    StorageService.getSuppliers(),
-  );
-  const [projects, setProjects] = useState<ProjectSchedule[]>(() =>
-    StorageService.getProjects(),
-  );
-  const [expenses, setExpenses] = useState<Expense[]>(() =>
-    StorageService.getExpenses(),
-  );
-  const [liabilities, setLiabilities] = useState<FinancialLiability[]>(() =>
-    StorageService.getLiabilities(),
-  );
-  const [prospects, setProspects] = useState<AIClientProspect[]>(() =>
-    StorageService.getProspects(),
-  );
-  const [notifications, setNotifications] = useState<AppNotification[]>(() =>
-    StorageService.getNotifications(),
-  );
+  useEffect(() => {
+    saveQuotations(data.quotations);
+    saveInvoices(data.invoices);
+    saveClients(data.clients);
+    saveSuppliers(data.suppliers);
+    saveProjects(data.projects);
+    saveExpenses(data.expenses);
+    saveLiabilities(data.liabilities);
+    saveNotifications(data.notifications);
+    saveAiProspects(data.aiProspects);
+  }, [data]);
 
-  // Document Preview Modal State
-  const [previewDoc, setPreviewDoc] = useState<{
-    doc: Quotation | Invoice;
-    type: 'Quotation' | 'Invoice';
-  } | null>(null);
+  const handleSaveQuotation = (q: Quotation) => {
+    const exists = data.quotations.some((item: Quotation) => item.id === q.id);
+    const updated = exists
+      ? data.quotations.map((item: Quotation) => (item.id === q.id ? q : item))
+      : [q, ...data.quotations];
 
-  // Request browser push notification permissions
-  const requestPushPermission = async () => {
-    if ('Notification' in window) {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        new Notification('Grand CMS Notifications Active', {
-          body: 'You will receive real-time push alerts for print clearance and project milestones.',
-          icon: '/grand-logo.svg',
-        });
-      }
-    }
-  };
-
-  const triggerPushAlert = (title: string, message: string) => {
-    // 1. Browser Notification
-    if ('Notification' in window && Notification.permission === 'granted') {
-      try {
-        new Notification(title, {
-          body: message,
-          icon: '/grand-logo.svg',
-        });
-      } catch (e) {
-        console.warn('Browser notification error:', e);
-      }
-    }
-
-    // 2. In-App Notification Record
     const newNotif: AppNotification = {
       id: `notif-${Date.now()}`,
-      title,
-      message,
-      type: 'project_deadline',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isRead: false,
-      priority: 'high',
+      title: 'Quotation Updated/Created',
+      message: `Quotation ${q.quotationNumber} for ${q.clientName} saved.`,
+      timestamp: new Date().toLocaleString(),
+      read: false,
+      type: 'quotation',
     };
-    const updated = [newNotif, ...notifications];
-    setNotifications(updated);
-    StorageService.saveNotifications(updated);
-  };
 
-  // --- ACTIONS & HANDLERS ---
-  const handleLogin = (session: UserSession) => {
-    StorageService.saveUserSession(session);
-    setUserSession(session);
-  };
-
-  const handleLogout = () => {
-    StorageService.clearUserSession();
-    setUserSession(null);
-  };
-
-  const handleSaveQuotation = (quotation: Quotation) => {
-    StorageService.saveQuotation(quotation);
-    setQuotations(StorageService.getQuotations());
-    triggerPushAlert(
-      `Quotation Updated: ${quotation.quotationNumber}`,
-      `Quotation for ${quotation.clientName} valued at ৳ ${quotation.total.toLocaleString()} was saved.`,
-    );
+    setData({
+      ...data,
+      quotations: updated,
+      notifications: [newNotif, ...data.notifications],
+    });
   };
 
   const handleDeleteQuotation = (id: string) => {
-    StorageService.deleteQuotation(id);
-    setQuotations(StorageService.getQuotations());
+    setData({
+      ...data,
+      quotations: data.quotations.filter((q: Quotation) => q.id !== id),
+    });
   };
 
-  const handleConvertToInvoice = (quotation: Quotation) => {
-    const invoiceNumber = `GCM-INV-2026-${String(invoices.length + 101).padStart(4, '0')}`;
-    const newInvoice: Invoice = {
-      id: `inv-${Date.now()}`,
-      invoiceNumber,
-      quotationId: quotation.id,
-      clientId: quotation.clientId,
-      clientName: quotation.clientName,
-      clientCompany: quotation.clientCompany,
-      clientAddress: quotation.clientAddress,
-      date: new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
-      subject: quotation.subject.replace('Quotation for –', 'Invoice for –'),
-      items: quotation.items,
-      subtotal: quotation.subtotal,
-      agencyCommissionAmount: quotation.agencyCommissionAmount,
-      vatAmount: quotation.vatAmount,
-      total: quotation.total,
-      advance: quotation.advance,
-      due: quotation.due,
-      payments: quotation.advance > 0 ? [
-        {
-          id: `pay-${Date.now()}`,
-          date: quotation.date,
-          amount: quotation.advance,
-          method: 'Bank Transfer',
-          reference: 'Advance upon quotation approval',
-          receivedBy: quotation.signatoryName || 'Mohin Uddin Mazumder',
-        }
-      ] : [],
-      termsAndConditions: quotation.termsAndConditions,
-      nbText: quotation.nbText,
-      signatoryName: quotation.signatoryName,
-      signatoryTitle: quotation.signatoryTitle,
-      signatoryPhone: quotation.signatoryPhone,
-      status: quotation.due === 0 ? 'Paid' : 'Due',
-      createdAt: new Date().toISOString(),
-    };
+  const handleSaveInvoice = (inv: Invoice) => {
+    const exists = data.invoices.some((item: Invoice) => item.id === inv.id);
+    const updated = exists
+      ? data.invoices.map((item: Invoice) => (item.id === inv.id ? inv : item))
+      : [inv, ...data.invoices];
 
-    StorageService.saveInvoice(newInvoice);
-
-    // Update quotation status to 'Invoiced'
-    const updatedQuo: Quotation = { ...quotation, status: 'Invoiced' };
-    StorageService.saveQuotation(updatedQuo);
-
-    setQuotations(StorageService.getQuotations());
-    setInvoices(StorageService.getInvoices());
-    setClients(StorageService.getClients());
-
-    triggerPushAlert(
-      `Invoice Generated: ${invoiceNumber}`,
-      `Created official tax invoice for ${newInvoice.clientName} (Total: ৳ ${newInvoice.total.toLocaleString()}).`,
-    );
-
-    // Open the new invoice in print view
-    setPreviewDoc({ doc: newInvoice, type: 'Invoice' });
-  };
-
-  const handleSaveInvoice = (invoice: Invoice) => {
-    StorageService.saveInvoice(invoice);
-    setInvoices(StorageService.getInvoices());
-    setClients(StorageService.getClients());
+    setData({
+      ...data,
+      invoices: updated,
+    });
   };
 
   const handleDeleteInvoice = (id: string) => {
-    StorageService.deleteInvoice(id);
-    setInvoices(StorageService.getInvoices());
-    setClients(StorageService.getClients());
+    setData({
+      ...data,
+      invoices: data.invoices.filter((inv: Invoice) => inv.id !== id),
+    });
   };
 
-  const handleSaveClient = (client: Client) => {
-    StorageService.saveClient(client);
-    setClients(StorageService.getClients());
-  };
-
-  const handleDeleteClient = (id: string) => {
-    StorageService.deleteClient(id);
-    setClients(StorageService.getClients());
-  };
-
-  const handleSaveSupplier = (supplier: Supplier) => {
-    StorageService.saveSupplier(supplier);
-    setSuppliers(StorageService.getSuppliers());
-  };
-
-  const handleSaveProject = (project: ProjectSchedule) => {
-    StorageService.saveProject(project);
-    setProjects(StorageService.getProjects());
-  };
-
-  const handleSaveExpense = (expense: Expense) => {
-    StorageService.saveExpense(expense);
-    setExpenses(StorageService.getExpenses());
-    setLiabilities(StorageService.getLiabilities());
-    setSuppliers(StorageService.getSuppliers());
-  };
-
-  const handlePayLiability = (liabilityId: string, amount: number) => {
-    StorageService.payLiability(liabilityId, amount);
-    setLiabilities(StorageService.getLiabilities());
-    setSuppliers(StorageService.getSuppliers());
-    triggerPushAlert(
-      'Supplier Liability Settled',
-      `Paid ৳ ${amount.toLocaleString()} towards outstanding vendor commitment.`,
-    );
-  };
-
-  const handleDeleteExpense = (id: string) => {
-    StorageService.deleteExpense(id);
-    setExpenses(StorageService.getExpenses());
-  };
-
-  const handleAddProspectToClients = (prospect: AIClientProspect) => {
-    const newClient: Client = {
-      id: `cli-${Date.now()}`,
-      name: prospect.companyName,
-      companyName: prospect.companyName,
-      contactPerson: 'Lead Coordinator',
-      designation: 'Head of Marketing / Procurement',
-      email: `${prospect.companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}@example.com`,
-      phone: '+880 1819 000000',
-      address: prospect.location,
-      city: 'Chattogram',
-      totalBilled: 0,
-      totalPaid: 0,
-      currentDue: 0,
-      status: 'active',
+  const handleConvertToInvoice = (q: Quotation) => {
+    const newInvoice: Invoice = {
+      id: `inv-${Date.now()}`,
+      invoiceNumber: q.quotationNumber.replace('/QT/', '/INV/'),
+      quotationId: q.id,
+      date: new Date().toISOString().split('T')[0],
+      clientName: q.clientName,
+      clientCompany: q.clientCompany,
+      clientAddress: q.clientAddress,
+      subject: q.subject,
+      items: q.items,
+      subtotal: q.subtotal,
+      agencyCommissionPercent: q.agencyCommissionPercent,
+      agencyCommissionAmount: q.agencyCommissionAmount,
+      vatPercent: q.vatPercent,
+      vatAmount: q.vatAmount,
+      total: q.total,
+      advance: 0,
+      due: q.total,
+      payments: [],
+      termsAndConditions: q.termsAndConditions,
+      nbText: q.nbText,
+      signatoryName: q.signatoryName,
+      signatoryTitle: q.signatoryTitle,
+      signatoryPhone: q.signatoryPhone,
+      status: 'Unpaid',
       createdAt: new Date().toISOString().split('T')[0],
     };
 
-    handleSaveClient(newClient);
-    triggerPushAlert('AI Prospect Converted', `${prospect.companyName} was added to Clients CRM.`);
-    setCurrentTab('clients_suppliers');
+    const updatedQuotations = data.quotations.map((item: Quotation) =>
+      item.id === q.id ? { ...item, status: 'Converted' as const } : item
+    );
+
+    setData({
+      ...data,
+      quotations: updatedQuotations,
+      invoices: [newInvoice, ...data.invoices],
+    });
+
+    setActiveTab('invoices');
   };
 
-  const handleDraftQuotationFromProspect = (prospect: AIClientProspect) => {
-    handleAddProspectToClients(prospect);
-    setCurrentTab('quotations');
+  const handleSaveClient = (c: Client) => {
+    setData({
+      ...data,
+      clients: [c, ...data.clients],
+    });
   };
 
-  // Quick Action menu callback
-  const handleQuickAction = (action: 'quotation' | 'invoice' | 'expense' | 'ai_discovery') => {
-    if (action === 'quotation') setCurrentTab('quotations');
-    else if (action === 'invoice') setCurrentTab('invoices');
-    else if (action === 'expense') setCurrentTab('expenses');
-    else if (action === 'ai_discovery') setCurrentTab('agentic_growth');
+  const handleSaveSupplier = (s: Supplier) => {
+    setData({
+      ...data,
+      suppliers: [s, ...data.suppliers],
+    });
   };
 
-  // If not logged in, show secure login portal
-  if (!userSession) {
-    return <AuthView onLogin={handleLogin} />;
+  const handleMarkNotificationsRead = () => {
+    setData({
+      ...data,
+      notifications: data.notifications.map((n: AppNotification) => ({ ...n, read: true })),
+    });
+  };
+
+  if (!isAuthenticated) {
+    return <AuthView onLogin={() => setIsAuthenticated(true)} />;
   }
 
-  // Active Main Content renderer
-  const renderMainContent = () => {
-    switch (currentTab) {
-      case 'dashboard':
-        return (
-          <Dashboard
-            quotations={quotations}
-            invoices={invoices}
-            clients={clients}
-            suppliers={suppliers}
-            projects={projects}
-            liabilities={liabilities}
-            onNavigate={(tab) => setCurrentTab(tab)}
-            onPreviewDocument={(doc, type) => setPreviewDoc({ doc, type })}
-            onNewQuotation={() => setCurrentTab('quotations')}
-          />
-        );
-
-      case 'quotations':
-        return (
-          <QuotationModule
-            quotations={quotations}
-            clients={clients}
-            onSaveQuotation={handleSaveQuotation}
-            onDeleteQuotation={handleDeleteQuotation}
-            onPreviewDocument={(q) => setPreviewDoc({ doc: q, type: 'Quotation' })}
-            onConvertToInvoice={handleConvertToInvoice}
-          />
-        );
-
-      case 'invoices':
-        return (
-          <InvoiceModule
-            invoices={invoices}
-            clients={clients}
-            onSaveInvoice={handleSaveInvoice}
-            onDeleteInvoice={handleDeleteInvoice}
-            onPreviewInvoice={(inv) => setPreviewDoc({ doc: inv, type: 'Invoice' })}
-          />
-        );
-
-      case 'clients_suppliers':
-        return (
-          <ClientsSuppliers
-            clients={clients}
-            suppliers={suppliers}
-            onSaveClient={handleSaveClient}
-            onDeleteClient={handleDeleteClient}
-            onSaveSupplier={handleSaveSupplier}
-            onDraftQuotationForClient={() => setCurrentTab('quotations')}
-            onLogSupplierExpense={() => setCurrentTab('expenses')}
-          />
-        );
-
-      case 'projects':
-        return (
-          <ProjectsScheduling
-            projects={projects}
-            clients={clients}
-            onSaveProject={handleSaveProject}
-            onTriggerPushNotification={triggerPushAlert}
-          />
-        );
-
-      case 'expenses':
-        return (
-          <ExpensesLiabilities
-            expenses={expenses}
-            liabilities={liabilities}
-            suppliers={suppliers}
-            onSaveExpense={handleSaveExpense}
-            onPayLiability={handlePayLiability}
-            onDeleteExpense={handleDeleteExpense}
-          />
-        );
-
-      case 'agentic_growth':
-        return (
-          <AgenticGrowth
-            prospects={prospects}
-            onAddProspectToClients={handleAddProspectToClients}
-            onDraftQuotationFromProspect={handleDraftQuotationFromProspect}
-          />
-        );
-
-      case 'ai_design':
-        return (
-          <AIDesignGenerator
-            onExportToQuotation={() => setCurrentTab('quotations')}
-          />
-        );
-
-      case 'deployment':
-        return <DeploymentHub />;
-
-      default:
-        return null;
+  const getTabTitle = () => {
+    switch (activeTab) {
+      case 'dashboard': return 'Dashboard Overview';
+      case 'quotations': return 'Quotations';
+      case 'invoices': return 'Invoices & Receipts';
+      case 'clients': return 'Clients & Suppliers';
+      case 'projects': return 'Project Scheduling';
+      case 'expenses': return 'Expenses & Liabilities';
+      case 'agentic': return 'AI Prospecting';
+      case 'generator': return 'AI Design Generator';
+      default: return 'Grand ERP';
     }
   };
 
-  // Computations for sidebar badges
-  const totalClientDue = invoices.reduce((sum, inv) => sum + inv.due, 0);
-  const totalSupplierLiability = liabilities
-    .filter((l) => l.status !== 'Cleared')
-    .reduce((sum, l) => sum + l.remainingLiability, 0);
-
   return (
-    <div className="min-h-screen bg-[#f4f7fb] text-slate-900 font-sans selection:bg-[#0B192C] selection:text-white">
-      {/* Document Print & Download Letterhead Modal */}
+    <div className="flex min-h-screen bg-[#07101C] text-slate-100 font-sans">
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onLogout={() => setIsAuthenticated(false)}
+      />
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <Navbar
+          notifications={data.notifications}
+          onMarkNotificationsRead={handleMarkNotificationsRead}
+          activeTabTitle={getTabTitle()}
+        />
+
+        <main className="p-4 sm:p-8 flex-1 overflow-y-auto">
+          {activeTab === 'dashboard' && (
+            <Dashboard
+              quotations={data.quotations}
+              invoices={data.invoices}
+              expenses={data.expenses}
+              clients={data.clients}
+              projects={data.projects}
+              setActiveTab={setActiveTab}
+            />
+          )}
+
+          {activeTab === 'quotations' && (
+            <QuotationModule
+              quotations={data.quotations}
+              clients={data.clients}
+              onSaveQuotation={handleSaveQuotation}
+              onDeleteQuotation={handleDeleteQuotation}
+              onPreviewQuotation={(q) => setPreviewDoc({ document: q, type: 'Quotation' })}
+              onConvertToInvoice={handleConvertToInvoice}
+            />
+          )}
+
+          {activeTab === 'invoices' && (
+            <InvoiceModule
+              invoices={data.invoices}
+              clients={data.clients}
+              onSaveInvoice={handleSaveInvoice}
+              onDeleteInvoice={handleDeleteInvoice}
+              onPreviewInvoice={(inv) => setPreviewDoc({ document: inv, type: 'Invoice' })}
+            />
+          )}
+
+          {activeTab === 'clients' && (
+            <ClientsSuppliers
+              clients={data.clients}
+              suppliers={data.suppliers}
+              onSaveClient={handleSaveClient}
+              onSaveSupplier={handleSaveSupplier}
+            />
+          )}
+
+          {activeTab === 'projects' && <ProjectsScheduling projects={data.projects} />}
+
+          {activeTab === 'expenses' && (
+            <ExpensesLiabilities expenses={data.expenses} liabilities={data.liabilities} />
+          )}
+
+          {activeTab === 'agentic' && <AgenticGrowth prospects={data.aiProspects} />}
+
+          {activeTab === 'generator' && <AIDesignGenerator />}
+        </main>
+      </div>
+
       {previewDoc && (
         <QuotationPrintView
-          document={previewDoc.doc}
+          document={previewDoc.document}
           type={previewDoc.type}
           onClose={() => setPreviewDoc(null)}
-          onConvertToInvoice={
-            previewDoc.type === 'Quotation'
-              ? (q) => {
-                  setPreviewDoc(null);
-                  handleConvertToInvoice(q);
-                }
-              : undefined
-          }
+          onConvertToInvoice={handleConvertToInvoice}
         />
-      )}
-
-      {/* Render either Mobile App Simulator mode OR Full Desktop Dashboard */}
-      {isMobileSimulator ? (
-        <MobileSimulatorFrame
-          currentTab={currentTab}
-          onSelectTab={setCurrentTab}
-          onExitMobileSimulator={() => setIsMobileSimulator(false)}
-        >
-          {renderMainContent()}
-        </MobileSimulatorFrame>
-      ) : (
-        <div className="flex flex-col min-h-screen">
-          {/* Top Navbar */}
-          <Navbar
-            user={userSession}
-            notifications={notifications}
-            isMobileSimulator={isMobileSimulator}
-            onToggleMobileSimulator={() => setIsMobileSimulator(!isMobileSimulator)}
-            onLogout={handleLogout}
-            onMarkNotificationsRead={() => {
-              const updated = notifications.map((n) => ({ ...n, isRead: true }));
-              setNotifications(updated);
-              StorageService.saveNotifications(updated);
-            }}
-            onQuickAction={handleQuickAction}
-            onRequestPushPermission={requestPushPermission}
-          />
-
-          {/* Body with Sidebar & Content */}
-          <div className="flex-1 flex overflow-hidden">
-            <Sidebar
-              currentTab={currentTab}
-              onSelectTab={setCurrentTab}
-              quotationCount={quotations.length}
-              dueAmount={totalClientDue}
-              liabilityAmount={totalSupplierLiability}
-            />
-
-            {/* Scrollable Main Application Canvas in Crisp Cool White */}
-            <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#f4f7fb]">
-              <div className="max-w-7xl mx-auto">{renderMainContent()}</div>
-            </main>
-          </div>
-        </div>
       )}
     </div>
   );
 }
+
+export default App;
