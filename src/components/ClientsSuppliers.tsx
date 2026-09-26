@@ -394,24 +394,32 @@ export const ClientsSuppliers: React.FC<ClientsSuppliersProps> = ({
             </button>
           </div>
 
-          {/* Action Button: Add Client or Add Supplier */}
-          {activeTab === 'clients' ? (
+          {/* Action Buttons: Both Add Supplier and Add Client always accessible */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => handleOpenClientModal()}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
+              onClick={() => {
+                setActiveTab('suppliers');
+                handleOpenSupplierModal();
+              }}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
+              title="Add a new production vendor / supplier"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Client</span>
+              <span>+ Add Supplier</span>
             </button>
-          ) : (
+
             <button
-              onClick={() => handleOpenSupplierModal()}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
+              onClick={() => {
+                setActiveTab('clients');
+                handleOpenClientModal();
+              }}
+              className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
+              title="Add a new client"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Supplier</span>
+              <span>+ Add Client</span>
             </button>
-          )}
+          </div>
         </div>
       </div>
 
@@ -956,14 +964,13 @@ export const ClientsSuppliers: React.FC<ClientsSuppliersProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-300 mb-1">Phone / Mobile *</label>
+                  <label className="block font-bold text-slate-300 mb-1">Phone / Mobile</label>
                   <input
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+880 1819..."
                     className="w-full p-2 bg-[#07101C] border border-slate-700 rounded-xl text-white"
-                    required
                   />
                 </div>
                 <div>

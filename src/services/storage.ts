@@ -45,11 +45,19 @@ export const loadStorageData = () => {
     const notif = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
     const prosp = localStorage.getItem(STORAGE_KEYS.AI_PROSPECTS);
 
+    const storedSuppliers: Supplier[] = sup ? JSON.parse(sup) : [];
+    const mergedSuppliers = [...storedSuppliers];
+    INITIAL_SUPPLIERS.forEach((initSup) => {
+      if (!mergedSuppliers.some((s) => s.id === initSup.id || s.name.toLowerCase() === initSup.name.toLowerCase())) {
+        mergedSuppliers.push(initSup);
+      }
+    });
+
     return {
       quotations: q ? JSON.parse(q) : INITIAL_QUOTATIONS,
       invoices: inv ? JSON.parse(inv) : INITIAL_INVOICES,
       clients: cli ? JSON.parse(cli) : INITIAL_CLIENTS,
-      suppliers: sup ? JSON.parse(sup) : INITIAL_SUPPLIERS,
+      suppliers: mergedSuppliers.length > 0 ? mergedSuppliers : INITIAL_SUPPLIERS,
       projects: proj ? JSON.parse(proj) : INITIAL_PROJECTS,
       expenses: exp ? JSON.parse(exp) : INITIAL_EXPENSES,
       liabilities: liab ? JSON.parse(liab) : INITIAL_LIABILITIES,
