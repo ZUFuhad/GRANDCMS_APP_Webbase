@@ -97,6 +97,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     id: 'sup-1',
     name: 'Rahim Print & Flex',
     serviceCategory: 'Flex & PVC Printing',
+    productsProvided: ['Black Back PVC Borfi', 'Digital Flex Print', 'Vinyl Stickers', 'Rollup Standee Banners'],
     contactPerson: 'Md. Rahim',
     phone: '+880 1712 112233',
     email: 'rahimprint@gmail.com',
@@ -104,11 +105,13 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     payableAmount: 45000,
     paidAmount: 30000,
     rating: 4.8,
+    paymentMethod: 'bKash Merchant / Bank Transfer',
   },
   {
     id: 'sup-2',
     name: 'Al-Madina Carpentry & Wood',
     serviceCategory: 'Wooden Framework & Booths',
+    productsProvided: ['Wooden Batten 1.5"x1"', 'Plywood 4mm/6mm', 'Standee Wood Stands', 'Borfi Wooden Frames', 'Exhibition Stage'],
     contactPerson: 'Haji Delwar',
     phone: '+880 1818 998877',
     email: 'almadinawood@yahoo.com',
@@ -116,6 +119,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     payableAmount: 60000,
     paidAmount: 60000,
     rating: 4.9,
+    paymentMethod: 'Cash / Bank Cheque',
   },
 ];
 

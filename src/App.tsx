@@ -12,7 +12,7 @@ import {
   saveAiProspects,
 } from './services/storage';
 import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect } from './types';
-import { DEFAULT_TERMS } from './mock/initialData';
+import { DEFAULT_TERMS, GRAND_COMPANY_INFO } from './mock/initialData';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
@@ -110,15 +110,30 @@ export function App() {
       vatPercent: q.vatPercent,
       vatAmount: q.vatAmount,
       total: q.total,
-      advance: 0,
-      due: q.total,
-      payments: [],
+      advance: q.advance || 0,
+      due: q.due !== undefined ? q.due : Math.max(0, q.total - (q.advance || 0)),
+      payments:
+        q.payments && q.payments.length > 0
+          ? q.payments
+          : q.advance > 0
+          ? [
+              {
+                id: `pay-${Date.now()}`,
+                amount: q.advance,
+                date: q.workOrderDate || new Date().toISOString().split('T')[0],
+                method: 'Bank Transfer',
+                reference: q.workOrderNumber || 'Quotation Advance',
+                receivedBy: GRAND_COMPANY_INFO.defaultSignatory.name,
+                notes: 'Advance received on quotation confirmation',
+              },
+            ]
+          : [],
       termsAndConditions: q.termsAndConditions,
       nbText: q.nbText,
       signatoryName: q.signatoryName,
       signatoryTitle: q.signatoryTitle,
       signatoryPhone: q.signatoryPhone,
-      status: 'Unpaid',
+      status: q.due === 0 && q.total > 0 ? 'Paid' : q.advance > 0 ? 'Partial' : 'Unpaid',
       createdAt: new Date().toISOString().split('T')[0],
     };
 
@@ -136,16 +151,38 @@ export function App() {
   };
 
   const handleSaveClient = (c: Client) => {
+    const exists = data.clients.some((item: Client) => item.id === c.id);
+    const updated = exists
+      ? data.clients.map((item: Client) => (item.id === c.id ? c : item))
+      : [c, ...data.clients];
     setData({
       ...data,
-      clients: [c, ...data.clients],
+      clients: updated,
+    });
+  };
+
+  const handleDeleteClient = (id: string) => {
+    setData({
+      ...data,
+      clients: data.clients.filter((c: Client) => c.id !== id),
     });
   };
 
   const handleSaveSupplier = (s: Supplier) => {
+    const exists = data.suppliers.some((item: Supplier) => item.id === s.id);
+    const updated = exists
+      ? data.suppliers.map((item: Supplier) => (item.id === s.id ? s : item))
+      : [s, ...data.suppliers];
     setData({
       ...data,
-      suppliers: [s, ...data.suppliers],
+      suppliers: updated,
+    });
+  };
+
+  const handleDeleteSupplier = (id: string) => {
+    setData({
+      ...data,
+      suppliers: data.suppliers.filter((s: Supplier) => s.id !== id),
     });
   };
 
@@ -298,7 +335,9 @@ export function App() {
               clients={data.clients}
               suppliers={data.suppliers}
               onSaveClient={handleSaveClient}
+              onDeleteClient={handleDeleteClient}
               onSaveSupplier={handleSaveSupplier}
+              onDeleteSupplier={handleDeleteSupplier}
             />
           )}
 

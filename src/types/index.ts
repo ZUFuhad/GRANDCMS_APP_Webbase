@@ -32,6 +32,9 @@ export interface Quotation {
   signatoryName?: string;
   signatoryTitle?: string;
   signatoryPhone?: string;
+  workOrderNumber?: string;
+  workOrderDate?: string;
+  payments?: PaymentRecord[];
   status: 'Draft' | 'Sent' | 'Approved' | 'Converted';
   createdAt: string;
 }
@@ -96,13 +99,18 @@ export interface Supplier {
   id: string;
   name: string;
   serviceCategory: string;
+  productsProvided?: string[];
   contactPerson: string;
   phone: string;
-  email: string;
+  email?: string;
   address: string;
   payableAmount: number;
   paidAmount: number;
-  rating: number;
+  rating?: number;
+  paymentMethod?: string;
+  bankDetails?: string;
+  notes?: string;
+  createdAt?: string;
 }
 
 export interface ProjectSchedule {
