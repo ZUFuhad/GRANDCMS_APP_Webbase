@@ -11,7 +11,7 @@ import {
   saveNotifications,
   saveAiProspects,
 } from './services/storage';
-import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect } from './types';
+import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect, ProjectSchedule, PaymentRecord } from './types';
 import { DEFAULT_TERMS, GRAND_COMPANY_INFO } from './mock/initialData';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
@@ -29,7 +29,6 @@ import { QuotationPrintView } from './components/QuotationPrintView';
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-
   const [data, setData] = useState(loadStorageData());
   const [previewDoc, setPreviewDoc] = useState<{ document: Quotation | Invoice; type: 'Quotation' | 'Invoice' } | null>(null);
 
@@ -47,10 +46,7 @@ export function App() {
 
   const handleSaveQuotation = (q: Quotation) => {
     const exists = data.quotations.some((item: Quotation) => item.id === q.id);
-    const updated = exists
-      ? data.quotations.map((item: Quotation) => (item.id === q.id ? q : item))
-      : [q, ...data.quotations];
-
+    const updated = exists ? data.quotations.map((item: Quotation) => (item.id === q.id ? q : item)) : [q, ...data.quotations];
     const newNotif: AppNotification = {
       id: `notif-${Date.now()}`,
       title: 'Quotation Updated/Created',
@@ -59,41 +55,80 @@ export function App() {
       read: false,
       type: 'quotation',
     };
+    setData({ ...data, quotations: updated, notifications: [newNotif, ...data.notifications] });
+  };
+
+  const handleApproveAndAdvance = (q: Quotation, payment: PaymentRecord) => {
+    const existingProject = data.projects.find((p: ProjectSchedule) => p.quotationId === q.id);
+    const project: ProjectSchedule = existingProject
+      ? {
+          ...existingProject,
+          quotationId: q.id,
+          quotationNumber: q.quotationNumber,
+          projectName: q.subject || q.items[0]?.job || `Project ${q.quotationNumber}`,
+          clientName: q.clientName,
+          clientCompany: q.clientCompany,
+          workItems: q.items,
+        }
+      : {
+          id: `proj-${q.id}`,
+          quotationId: q.id,
+          quotationNumber: q.quotationNumber,
+          projectName: q.subject || q.items[0]?.job || `Project ${q.quotationNumber}`,
+          clientName: q.clientName,
+          clientCompany: q.clientCompany,
+          venue: '',
+          eventDate: '',
+          setupDate: '',
+          status: 'Upcoming',
+          assignedTeam: [],
+          checklist: q.items.map((item) => ({
+            task: `${item.job}${item.description ? ` — ${item.description}` : ''}`,
+            completed: false,
+          })),
+          workItems: q.items,
+          instructions: '',
+          createdAt: new Date().toISOString().split('T')[0],
+        };
+
+    const updatedQuotations = data.quotations.map((item: Quotation) => item.id === q.id ? { ...item, status: 'Approved' as const } : item);
+    const updatedProjects = existingProject
+      ? data.projects.map((p: ProjectSchedule) => p.id === existingProject.id ? project : p)
+      : [project, ...data.projects];
+    const newNotif: AppNotification = {
+      id: `notif-project-${Date.now()}`,
+      title: 'Project Scheduling Created',
+      message: `${q.quotationNumber} approved after advance of ৳${payment.amount.toLocaleString()} and added to Project Scheduling.`,
+      timestamp: new Date().toLocaleString(),
+      read: false,
+      type: 'project',
+    };
 
     setData({
       ...data,
-      quotations: updated,
+      quotations: updatedQuotations,
+      projects: updatedProjects,
       notifications: [newNotif, ...data.notifications],
     });
+    setActiveTab('projects');
   };
 
-  const handleDeleteQuotation = (id: string) => {
-    setData({
-      ...data,
-      quotations: data.quotations.filter((q: Quotation) => q.id !== id),
-    });
-  };
+  const handleDeleteQuotation = (id: string) => setData({ ...data, quotations: data.quotations.filter((q: Quotation) => q.id !== id) });
 
   const handleSaveInvoice = (inv: Invoice) => {
     const exists = data.invoices.some((item: Invoice) => item.id === inv.id);
-    const updated = exists
-      ? data.invoices.map((item: Invoice) => (item.id === inv.id ? inv : item))
-      : [inv, ...data.invoices];
-
-    setData({
-      ...data,
-      invoices: updated,
-    });
+    const updated = exists ? data.invoices.map((item: Invoice) => (item.id === inv.id ? inv : item)) : [inv, ...data.invoices];
+    setData({ ...data, invoices: updated });
   };
 
-  const handleDeleteInvoice = (id: string) => {
-    setData({
-      ...data,
-      invoices: data.invoices.filter((inv: Invoice) => inv.id !== id),
-    });
-  };
+  const handleDeleteInvoice = (id: string) => setData({ ...data, invoices: data.invoices.filter((inv: Invoice) => inv.id !== id) });
 
   const handleConvertToInvoice = (q: Quotation) => {
+    const duplicate = data.invoices.find((inv: Invoice) => inv.quotationId === q.id);
+    if (duplicate) {
+      setActiveTab('invoices');
+      return;
+    }
     const newInvoice: Invoice = {
       id: `inv-${Date.now()}`,
       invoiceNumber: q.quotationNumber.replace('/QT/', '/INV/'),
@@ -112,22 +147,7 @@ export function App() {
       total: q.total,
       advance: q.advance || 0,
       due: q.due !== undefined ? q.due : Math.max(0, q.total - (q.advance || 0)),
-      payments:
-        q.payments && q.payments.length > 0
-          ? q.payments
-          : q.advance > 0
-          ? [
-              {
-                id: `pay-${Date.now()}`,
-                amount: q.advance,
-                date: q.workOrderDate || new Date().toISOString().split('T')[0],
-                method: 'Bank Transfer',
-                reference: q.workOrderNumber || 'Quotation Advance',
-                receivedBy: GRAND_COMPANY_INFO.defaultSignatory.name,
-                notes: 'Advance received on quotation confirmation',
-              },
-            ]
-          : [],
+      payments: q.payments || [],
       termsAndConditions: q.termsAndConditions,
       nbText: q.nbText,
       signatoryName: q.signatoryName,
@@ -136,74 +156,29 @@ export function App() {
       status: q.due === 0 && q.total > 0 ? 'Paid' : q.advance > 0 ? 'Partial' : 'Unpaid',
       createdAt: new Date().toISOString().split('T')[0],
     };
-
-    const updatedQuotations = data.quotations.map((item: Quotation) =>
-      item.id === q.id ? { ...item, status: 'Converted' as const } : item
-    );
-
     setData({
       ...data,
-      quotations: updatedQuotations,
+      quotations: data.quotations.map((item: Quotation) => item.id === q.id ? { ...item, status: 'Converted' as const } : item),
       invoices: [newInvoice, ...data.invoices],
     });
-
     setActiveTab('invoices');
   };
 
   const handleSaveClient = (c: Client) => {
     const exists = data.clients.some((item: Client) => item.id === c.id);
-    const updated = exists
-      ? data.clients.map((item: Client) => (item.id === c.id ? c : item))
-      : [c, ...data.clients];
-    setData({
-      ...data,
-      clients: updated,
-    });
+    setData({ ...data, clients: exists ? data.clients.map((item: Client) => item.id === c.id ? c : item) : [c, ...data.clients] });
   };
-
-  const handleDeleteClient = (id: string) => {
-    setData({
-      ...data,
-      clients: data.clients.filter((c: Client) => c.id !== id),
-    });
-  };
-
+  const handleDeleteClient = (id: string) => setData({ ...data, clients: data.clients.filter((c: Client) => c.id !== id) });
   const handleSaveSupplier = (s: Supplier) => {
     const exists = data.suppliers.some((item: Supplier) => item.id === s.id);
-    const updated = exists
-      ? data.suppliers.map((item: Supplier) => (item.id === s.id ? s : item))
-      : [s, ...data.suppliers];
-    setData({
-      ...data,
-      suppliers: updated,
-    });
+    setData({ ...data, suppliers: exists ? data.suppliers.map((item: Supplier) => item.id === s.id ? s : item) : [s, ...data.suppliers] });
   };
-
-  const handleDeleteSupplier = (id: string) => {
-    setData({
-      ...data,
-      suppliers: data.suppliers.filter((s: Supplier) => s.id !== id),
-    });
-  };
-
+  const handleDeleteSupplier = (id: string) => setData({ ...data, suppliers: data.suppliers.filter((s: Supplier) => s.id !== id) });
   const handleSaveProspect = (p: AIClientProspect) => {
     const exists = data.aiProspects.some((item: AIClientProspect) => item.id === p.id);
-    const updated = exists
-      ? data.aiProspects.map((item: AIClientProspect) => (item.id === p.id ? p : item))
-      : [p, ...data.aiProspects];
-
-    setData({
-      ...data,
-      aiProspects: updated,
-    });
+    setData({ ...data, aiProspects: exists ? data.aiProspects.map((item: AIClientProspect) => item.id === p.id ? p : item) : [p, ...data.aiProspects] });
   };
-
-  const handleDeleteProspect = (id: string) => {
-    setData({
-      ...data,
-      aiProspects: data.aiProspects.filter((p: AIClientProspect) => p.id !== id),
-    });
-  };
+  const handleDeleteProspect = (id: string) => setData({ ...data, aiProspects: data.aiProspects.filter((p: AIClientProspect) => p.id !== id) });
 
   const handleConvertLeadToQuotation = (lead: AIClientProspect) => {
     const nextNum = String(data.quotations.length + 1).padStart(3, '0');
@@ -218,16 +193,7 @@ export function App() {
       clientPhone: lead.mobileNumber,
       clientEmail: lead.email || '',
       subject: `Proposal for ${lead.recommendedService}`,
-      items: [
-        {
-          id: `qi-${Date.now()}`,
-          job: lead.recommendedService.slice(0, 30),
-          description: `${lead.recommendedService} for ${lead.companyName}`,
-          quantity: 1,
-          unitPrice: lead.estimatedBudget,
-          total: lead.estimatedBudget,
-        },
-      ],
+      items: [{ id: `qi-${Date.now()}`, job: lead.recommendedService.slice(0, 30), description: `${lead.recommendedService} for ${lead.companyName}`, quantity: 1, unitPrice: lead.estimatedBudget, total: lead.estimatedBudget }],
       subtotal: lead.estimatedBudget,
       agencyCommissionPercent: 10,
       agencyCommissionAmount: Math.round(lead.estimatedBudget * 0.1),
@@ -244,29 +210,12 @@ export function App() {
       status: 'Draft',
       createdAt: new Date().toISOString().split('T')[0],
     };
-
-    const updatedProspects = data.aiProspects.map((item: AIClientProspect) =>
-      item.id === lead.id ? { ...item, status: 'Proposal Sent' as const } : item
-    );
-
-    setData({
-      ...data,
-      aiProspects: updatedProspects,
-      quotations: [newQuotation, ...data.quotations],
-    });
+    setData({ ...data, aiProspects: data.aiProspects.map((item: AIClientProspect) => item.id === lead.id ? { ...item, status: 'Proposal Sent' as const } : item), quotations: [newQuotation, ...data.quotations] });
     setActiveTab('quotations');
   };
+  const handleMarkNotificationsRead = () => setData({ ...data, notifications: data.notifications.map((n: AppNotification) => ({ ...n, read: true })) });
 
-  const handleMarkNotificationsRead = () => {
-    setData({
-      ...data,
-      notifications: data.notifications.map((n: AppNotification) => ({ ...n, read: true })),
-    });
-  };
-
-  if (!isAuthenticated) {
-    return <AuthView onLogin={() => setIsAuthenticated(true)} />;
-  }
+  if (!isAuthenticated) return <AuthView onLogin={() => setIsAuthenticated(true)} />;
 
   const getTabTitle = () => {
     switch (activeTab) {
@@ -284,90 +233,21 @@ export function App() {
 
   return (
     <div className="flex min-h-screen bg-[#07101C] text-slate-100 font-sans">
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onLogout={() => setIsAuthenticated(false)}
-      />
-
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => setIsAuthenticated(false)} />
       <div className="flex-1 flex flex-col min-w-0">
-        <Navbar
-          notifications={data.notifications}
-          onMarkNotificationsRead={handleMarkNotificationsRead}
-          activeTabTitle={getTabTitle()}
-        />
-
+        <Navbar notifications={data.notifications} onMarkNotificationsRead={handleMarkNotificationsRead} activeTabTitle={getTabTitle()} />
         <main className="p-4 sm:p-8 flex-1 overflow-y-auto">
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              quotations={data.quotations}
-              invoices={data.invoices}
-              expenses={data.expenses}
-              clients={data.clients}
-              projects={data.projects}
-              setActiveTab={setActiveTab}
-            />
-          )}
-
-          {activeTab === 'quotations' && (
-            <QuotationModule
-              quotations={data.quotations}
-              clients={data.clients}
-              onSaveQuotation={handleSaveQuotation}
-              onDeleteQuotation={handleDeleteQuotation}
-              onPreviewQuotation={(q) => setPreviewDoc({ document: q, type: 'Quotation' })}
-              onConvertToInvoice={handleConvertToInvoice}
-            />
-          )}
-
-          {activeTab === 'invoices' && (
-            <InvoiceModule
-              invoices={data.invoices}
-              clients={data.clients}
-              onSaveInvoice={handleSaveInvoice}
-              onDeleteInvoice={handleDeleteInvoice}
-              onPreviewInvoice={(inv) => setPreviewDoc({ document: inv, type: 'Invoice' })}
-            />
-          )}
-
-          {activeTab === 'clients' && (
-            <ClientsSuppliers
-              clients={data.clients}
-              suppliers={data.suppliers}
-              onSaveClient={handleSaveClient}
-              onDeleteClient={handleDeleteClient}
-              onSaveSupplier={handleSaveSupplier}
-              onDeleteSupplier={handleDeleteSupplier}
-            />
-          )}
-
-          {activeTab === 'projects' && <ProjectsScheduling projects={data.projects} />}
-
-          {activeTab === 'expenses' && (
-            <ExpensesLiabilities expenses={data.expenses} liabilities={data.liabilities} />
-          )}
-
-          {activeTab === 'agentic' && (
-            <AgenticGrowth
-              prospects={data.aiProspects}
-              onSaveProspect={handleSaveProspect}
-              onDeleteProspect={handleDeleteProspect}
-              onConvertToQuotation={handleConvertLeadToQuotation}
-            />
-          )}
-
+          {activeTab === 'dashboard' && <Dashboard quotations={data.quotations} invoices={data.invoices} expenses={data.expenses} clients={data.clients} projects={data.projects} setActiveTab={setActiveTab} />}
+          {activeTab === 'quotations' && <QuotationModule quotations={data.quotations} clients={data.clients} onSaveQuotation={handleSaveQuotation} onDeleteQuotation={handleDeleteQuotation} onPreviewQuotation={(q) => setPreviewDoc({ document: q, type: 'Quotation' })} onConvertToInvoice={handleConvertToInvoice} onApproveAndAdvance={handleApproveAndAdvance} />}
+          {activeTab === 'invoices' && <InvoiceModule invoices={data.invoices} clients={data.clients} onSaveInvoice={handleSaveInvoice} onDeleteInvoice={handleDeleteInvoice} onPreviewInvoice={(inv) => setPreviewDoc({ document: inv, type: 'Invoice' })} />}
+          {activeTab === 'clients' && <ClientsSuppliers clients={data.clients} suppliers={data.suppliers} onSaveClient={handleSaveClient} onDeleteClient={handleDeleteClient} onSaveSupplier={handleSaveSupplier} onDeleteSupplier={handleDeleteSupplier} />}
+          {activeTab === 'projects' && <ProjectsScheduling projects={data.projects} quotations={data.quotations} />}
+          {activeTab === 'expenses' && <ExpensesLiabilities expenses={data.expenses} liabilities={data.liabilities} />}
+          {activeTab === 'agentic' && <AgenticGrowth prospects={data.aiProspects} onSaveProspect={handleSaveProspect} onDeleteProspect={handleDeleteProspect} onConvertToQuotation={handleConvertLeadToQuotation} />}
           {activeTab === 'generator' && <AIDesignGenerator />}
         </main>
       </div>
-
-      {previewDoc && (
-        <QuotationPrintView
-          document={previewDoc.document}
-          type={previewDoc.type}
-          onClose={() => setPreviewDoc(null)}
-          onConvertToInvoice={handleConvertToInvoice}
-        />
-      )}
+      {previewDoc && <QuotationPrintView document={previewDoc.document} type={previewDoc.type} onClose={() => setPreviewDoc(null)} onConvertToInvoice={handleConvertToInvoice} />}
     </div>
   );
 }
