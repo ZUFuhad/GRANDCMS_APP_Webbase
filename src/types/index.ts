@@ -115,18 +115,27 @@ export interface Supplier {
 
 export interface ProjectSchedule {
   id: string;
+  quotationId?: string;
+  quotationNumber?: string;
   projectName: string;
   clientName: string;
+  clientCompany?: string;
   venue: string;
   eventDate: string;
   setupDate: string;
   status: 'Upcoming' | 'In Progress' | 'Completed' | 'Cancelled';
   assignedTeam: string[];
   checklist: { task: string; completed: boolean }[];
+  workItems?: QuotationItem[];
+  instructions?: string;
+  createdAt?: string;
 }
 
 export interface Expense {
   id: string;
+  projectId?: string;
+  quotationId?: string;
+  expenseType?: 'Project' | 'Office';
   date: string;
   category: 'Production' | 'Transport' | 'Office Rent' | 'Salary' | 'Marketing' | 'Utilities' | 'Misc';
   description: string;
