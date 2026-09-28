@@ -5,9 +5,10 @@ import { Calendar, CheckCircle2, Clock, Printer, Save, Briefcase } from 'lucide-
 interface ProjectsSchedulingProps {
   projects: ProjectSchedule[];
   quotations: Quotation[];
+  onSaveProject: (project: ProjectSchedule) => void;
 }
 
-export const ProjectsScheduling: React.FC<ProjectsSchedulingProps> = ({ projects, quotations }) => {
+export const ProjectsScheduling: React.FC<ProjectsSchedulingProps> = ({ projects, quotations, onSaveProject }) => {
   const [localProjects, setLocalProjects] = useState<ProjectSchedule[]>(projects);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -30,7 +31,9 @@ export const ProjectsScheduling: React.FC<ProjectsSchedulingProps> = ({ projects
       const exists = prev.some(p => p.id === id);
       const base = prev.find(p => p.id === id) || mergedProjects.find(p => p.id === id);
       if (!base) return prev;
-      return exists ? prev.map(p => p.id === id ? { ...p, ...patch } : p) : [...prev, { ...base, ...patch }];
+      const nextProject = { ...base, ...patch };
+      onSaveProject(nextProject);
+      return exists ? prev.map(p => p.id === id ? nextProject : p) : [...prev, nextProject];
     });
   };
 
