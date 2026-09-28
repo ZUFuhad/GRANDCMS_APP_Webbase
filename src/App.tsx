@@ -11,6 +11,7 @@ import {
   saveLiabilities,
   saveNotifications,
   saveAiProspects,
+  deleteRemote,
 } from './services/storage';
 import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect, ProjectSchedule, PaymentRecord } from './types';
 import { DEFAULT_TERMS, GRAND_COMPANY_INFO } from './mock/initialData';
@@ -127,7 +128,10 @@ export function App() {
     setActiveTab('projects');
   };
 
-  const handleDeleteQuotation = (id: string) => setData({ ...data, quotations: data.quotations.filter((q: Quotation) => q.id !== id) });
+  const handleDeleteQuotation = (id: string) => {
+    setData({ ...data, quotations: data.quotations.filter((q: Quotation) => q.id !== id) });
+    void deleteRemote('quotations', id);
+  };
 
   const handleSaveInvoice = (inv: Invoice) => {
     const exists = data.invoices.some((item: Invoice) => item.id === inv.id);
@@ -135,7 +139,10 @@ export function App() {
     setData({ ...data, invoices: updated });
   };
 
-  const handleDeleteInvoice = (id: string) => setData({ ...data, invoices: data.invoices.filter((inv: Invoice) => inv.id !== id) });
+  const handleDeleteInvoice = (id: string) => {
+    setData({ ...data, invoices: data.invoices.filter((inv: Invoice) => inv.id !== id) });
+    void deleteRemote('invoices', id);
+  };
 
   const handleConvertToInvoice = (q: Quotation) => {
     const duplicate = data.invoices.find((inv: Invoice) => inv.quotationId === q.id);
@@ -182,12 +189,23 @@ export function App() {
     const exists = data.clients.some((item: Client) => item.id === c.id);
     setData({ ...data, clients: exists ? data.clients.map((item: Client) => item.id === c.id ? c : item) : [c, ...data.clients] });
   };
-  const handleDeleteClient = (id: string) => setData({ ...data, clients: data.clients.filter((c: Client) => c.id !== id) });
+  const handleDeleteClient = (id: string) => {
+    setData({ ...data, clients: data.clients.filter((c: Client) => c.id !== id) });
+    void deleteRemote('clients', id);
+  };
   const handleSaveSupplier = (s: Supplier) => {
     const exists = data.suppliers.some((item: Supplier) => item.id === s.id);
     setData({ ...data, suppliers: exists ? data.suppliers.map((item: Supplier) => item.id === s.id ? s : item) : [s, ...data.suppliers] });
   };
-  const handleDeleteSupplier = (id: string) => setData({ ...data, suppliers: data.suppliers.filter((s: Supplier) => s.id !== id) });
+  const handleDeleteSupplier = (id: string) => {
+    setData({ ...data, suppliers: data.suppliers.filter((s: Supplier) => s.id !== id) });
+    void deleteRemote('suppliers', id);
+  };
+  const handleSaveProject = (project: ProjectSchedule) => {
+    const exists = data.projects.some((item: ProjectSchedule) => item.id === project.id);
+    setData({ ...data, projects: exists ? data.projects.map((item: ProjectSchedule) => item.id === project.id ? project : item) : [project, ...data.projects] });
+  };
+
   const handleSaveProspect = (p: AIClientProspect) => {
     const exists = data.aiProspects.some((item: AIClientProspect) => item.id === p.id);
     setData({ ...data, aiProspects: exists ? data.aiProspects.map((item: AIClientProspect) => item.id === p.id ? p : item) : [p, ...data.aiProspects] });
@@ -255,7 +273,7 @@ export function App() {
           {activeTab === 'quotations' && <QuotationModule quotations={data.quotations} clients={data.clients} onSaveQuotation={handleSaveQuotation} onDeleteQuotation={handleDeleteQuotation} onPreviewQuotation={(q) => setPreviewDoc({ document: q, type: 'Quotation' })} onConvertToInvoice={handleConvertToInvoice} onApproveAndAdvance={handleApproveAndAdvance} />}
           {activeTab === 'invoices' && <InvoiceModule invoices={data.invoices} clients={data.clients} onSaveInvoice={handleSaveInvoice} onDeleteInvoice={handleDeleteInvoice} onPreviewInvoice={(inv) => setPreviewDoc({ document: inv, type: 'Invoice' })} />}
           {activeTab === 'clients' && <ClientsSuppliers clients={data.clients} suppliers={data.suppliers} onSaveClient={handleSaveClient} onDeleteClient={handleDeleteClient} onSaveSupplier={handleSaveSupplier} onDeleteSupplier={handleDeleteSupplier} />}
-          {activeTab === 'projects' && <ProjectsScheduling projects={data.projects} quotations={data.quotations} />}
+          {activeTab === 'projects' && <ProjectsScheduling projects={data.projects} quotations={data.quotations} onSaveProject={handleSaveProject} />}
           {activeTab === 'expenses' && <ExpensesLiabilities expenses={data.expenses} liabilities={data.liabilities} />}
           {activeTab === 'agentic' && <AgenticGrowth prospects={data.aiProspects} onSaveProspect={handleSaveProspect} onDeleteProspect={handleDeleteProspect} onConvertToQuotation={handleConvertLeadToQuotation} />}
           {activeTab === 'generator' && <AIDesignGenerator />}
