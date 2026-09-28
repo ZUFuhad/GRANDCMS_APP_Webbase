@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   loadStorageData,
+  hydrateStorageData,
   saveQuotations,
   saveInvoices,
   saveClients,
@@ -30,19 +31,32 @@ export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [data, setData] = useState(loadStorageData());
+  const [isHydrated, setIsHydrated] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<{ document: Quotation | Invoice; type: 'Quotation' | 'Invoice' } | null>(null);
 
   useEffect(() => {
-    saveQuotations(data.quotations);
-    saveInvoices(data.invoices);
+    let active = true;
+    hydrateStorageData().then((remoteData) => {
+      if (active) {
+        setData(remoteData);
+        setIsHydrated(true);
+      }
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    saveQuotations(data.quotations, data.clients);
+    saveInvoices(data.invoices, data.clients);
     saveClients(data.clients);
     saveSuppliers(data.suppliers);
-    saveProjects(data.projects);
+    saveProjects(data.projects, data.clients);
     saveExpenses(data.expenses);
     saveLiabilities(data.liabilities);
     saveNotifications(data.notifications);
     saveAiProspects(data.aiProspects);
-  }, [data]);
+  }, [data, isHydrated]);
 
   const handleSaveQuotation = (q: Quotation) => {
     const exists = data.quotations.some((item: Quotation) => item.id === q.id);
