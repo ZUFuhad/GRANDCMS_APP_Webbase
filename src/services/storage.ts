@@ -1,99 +1,234 @@
 import {
-  Quotation,
-  Invoice,
-  Client,
-  Supplier,
-  ProjectSchedule,
-  Expense,
-  FinancialLiability,
-  AppNotification,
-  AIClientProspect,
+  Quotation, Invoice, Client, Supplier, ProjectSchedule, Expense,
+  FinancialLiability, AppNotification, AIClientProspect,
 } from '../types';
 import {
-  INITIAL_QUOTATIONS,
-  INITIAL_INVOICES,
-  INITIAL_CLIENTS,
-  INITIAL_SUPPLIERS,
-  INITIAL_PROJECTS,
-  INITIAL_EXPENSES,
-  INITIAL_LIABILITIES,
-  INITIAL_NOTIFICATIONS,
+  INITIAL_QUOTATIONS, INITIAL_INVOICES, INITIAL_CLIENTS, INITIAL_SUPPLIERS,
+  INITIAL_PROJECTS, INITIAL_EXPENSES, INITIAL_LIABILITIES, INITIAL_NOTIFICATIONS,
   INITIAL_AI_PROSPECTS,
 } from '../mock/initialData';
+import { supabase } from './supabase';
 
 const STORAGE_KEYS = {
-  QUOTATIONS: 'grand_cms_quotations',
-  INVOICES: 'grand_cms_invoices',
-  CLIENTS: 'grand_cms_clients',
-  SUPPLIERS: 'grand_cms_suppliers',
-  PROJECTS: 'grand_cms_projects',
-  EXPENSES: 'grand_cms_expenses',
-  LIABILITIES: 'grand_cms_liabilities',
-  NOTIFICATIONS: 'grand_cms_notifications',
+  QUOTATIONS: 'grand_cms_quotations', INVOICES: 'grand_cms_invoices',
+  CLIENTS: 'grand_cms_clients', SUPPLIERS: 'grand_cms_suppliers',
+  PROJECTS: 'grand_cms_projects', EXPENSES: 'grand_cms_expenses',
+  LIABILITIES: 'grand_cms_liabilities', NOTIFICATIONS: 'grand_cms_notifications',
   AI_PROSPECTS: 'grand_cms_ai_prospects',
 };
 
-export const loadStorageData = () => {
+const readLocal = (key: string, fallback: any) => {
   try {
-    const q = localStorage.getItem(STORAGE_KEYS.QUOTATIONS);
-    const inv = localStorage.getItem(STORAGE_KEYS.INVOICES);
-    const cli = localStorage.getItem(STORAGE_KEYS.CLIENTS);
-    const sup = localStorage.getItem(STORAGE_KEYS.SUPPLIERS);
-    const proj = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-    const exp = localStorage.getItem(STORAGE_KEYS.EXPENSES);
-    const liab = localStorage.getItem(STORAGE_KEYS.LIABILITIES);
-    const notif = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
-    const prosp = localStorage.getItem(STORAGE_KEYS.AI_PROSPECTS);
-
-    const storedSuppliers: Supplier[] = sup ? JSON.parse(sup) : [];
-    const mergedSuppliers = [...storedSuppliers];
-    INITIAL_SUPPLIERS.forEach((initSup) => {
-      if (!mergedSuppliers.some((s) => s.id === initSup.id || s.name.toLowerCase() === initSup.name.toLowerCase())) {
-        mergedSuppliers.push(initSup);
-      }
-    });
-
-    return {
-      quotations: q ? JSON.parse(q) : INITIAL_QUOTATIONS,
-      invoices: inv ? JSON.parse(inv) : INITIAL_INVOICES,
-      clients: cli ? JSON.parse(cli) : INITIAL_CLIENTS,
-      suppliers: mergedSuppliers.length > 0 ? mergedSuppliers : INITIAL_SUPPLIERS,
-      projects: proj ? JSON.parse(proj) : INITIAL_PROJECTS,
-      expenses: exp ? JSON.parse(exp) : INITIAL_EXPENSES,
-      liabilities: liab ? JSON.parse(liab) : INITIAL_LIABILITIES,
-      notifications: notif ? JSON.parse(notif) : INITIAL_NOTIFICATIONS,
-      aiProspects: prosp
-        ? JSON.parse(prosp).map((p: any, idx: number) => ({
-            ...p,
-            mobileNumber: p.mobileNumber || (idx === 0 ? '01711-884920' : idx === 1 ? '01819-335128' : '01914-772391'),
-            contactPerson: p.contactPerson || 'Contact Person',
-            priority: p.priority || 'High',
-            triggerEvent: p.triggerEvent || 'Direct Market Lead',
-          }))
-        : INITIAL_AI_PROSPECTS,
-    };
-  } catch (e) {
-    console.error('Failed to load storage', e);
-    return {
-      quotations: INITIAL_QUOTATIONS,
-      invoices: INITIAL_INVOICES,
-      clients: INITIAL_CLIENTS,
-      suppliers: INITIAL_SUPPLIERS,
-      projects: INITIAL_PROJECTS,
-      expenses: INITIAL_EXPENSES,
-      liabilities: INITIAL_LIABILITIES,
-      notifications: INITIAL_NOTIFICATIONS,
-      aiProspects: INITIAL_AI_PROSPECTS,
-    };
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
   }
 };
 
-export const saveQuotations = (data: Quotation[]) => localStorage.setItem(STORAGE_KEYS.QUOTATIONS, JSON.stringify(data));
-export const saveInvoices = (data: Invoice[]) => localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(data));
-export const saveClients = (data: Client[]) => localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(data));
-export const saveSuppliers = (data: Supplier[]) => localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(data));
-export const saveProjects = (data: ProjectSchedule[]) => localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(data));
-export const saveExpenses = (data: Expense[]) => localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(data));
-export const saveLiabilities = (data: FinancialLiability[]) => localStorage.setItem(STORAGE_KEYS.LIABILITIES, JSON.stringify(data));
-export const saveNotifications = (data: AppNotification[]) => localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(data));
-export const saveAiProspects = (data: AIClientProspect[]) => localStorage.setItem(STORAGE_KEYS.AI_PROSPECTS, JSON.stringify(data));
+const saveLocal = (key: string, value: any) => localStorage.setItem(key, JSON.stringify(value));
+
+const clientIdFor = (name: string, company = '') => {
+  const source = (company || name || 'client').trim().toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < source.length; i++) hash = ((hash << 5) - hash + source.charCodeAt(i)) | 0;
+  return `client-${Math.abs(hash)}`;
+};
+
+const toClientRow = (c: Client) => ({
+  id: c.id, name: c.name, company_name: c.companyName, email: c.email || null,
+  phone: c.phone || null, address: c.address || null, city: c.city || null,
+  contact_person: c.contactPerson || null, designation: c.designation || null,
+  total_billed: c.totalBilled || 0, total_paid: c.totalPaid || 0,
+  current_due: c.currentDue || 0, status: c.status, created_at: c.createdAt || new Date().toISOString(),
+});
+
+const fromClientRow = (r: any): Client => ({
+  id: r.id, name: r.name, companyName: r.company_name || '', contactPerson: r.contact_person || '',
+  designation: r.designation || '', email: r.email || '', phone: r.phone || '',
+  address: r.address || '', city: r.city || '', totalBilled: Number(r.total_billed || 0),
+  totalPaid: Number(r.total_paid || 0), currentDue: Number(r.current_due || 0),
+  status: r.status === 'inactive' ? 'inactive' : 'active', createdAt: r.created_at || new Date().toISOString(),
+});
+
+const toSupplierRow = (s: Supplier) => ({
+  id: s.id, name: s.name, company_name: s.name, category: s.serviceCategory || 'General',
+  phone: s.phone || null, email: s.email || null, address: s.address || null,
+  bank_details: s.bankDetails || null, total_purchased: s.payableAmount || 0,
+  total_paid: s.paidAmount || 0, payable_liability: Math.max(0, (s.payableAmount || 0) - (s.paidAmount || 0)),
+  status: 'active', created_at: s.createdAt || new Date().toISOString(),
+});
+
+const fromSupplierRow = (r: any): Supplier => ({
+  id: r.id, name: r.name, serviceCategory: r.category || 'General',
+  productsProvided: [], contactPerson: '', phone: r.phone || '', email: r.email || '',
+  address: r.address || '', payableAmount: Number(r.total_purchased || 0),
+  paidAmount: Number(r.total_paid || 0), bankDetails: r.bank_details || '',
+  createdAt: r.created_at || new Date().toISOString(),
+});
+
+const toQuotationRow = (q: Quotation, clients: Client[]) => {
+  const client = clients.find(c => c.companyName === q.clientCompany || c.name === q.clientName);
+  return {
+    id: q.id, quotation_number: q.quotationNumber, client_id: client?.id || clientIdFor(q.clientName, q.clientCompany),
+    client_name: q.clientName, client_company: q.clientCompany || null, date: q.date,
+    validity_date: q.validityDate || null, subject: q.subject, items_json: q.items || [],
+    subtotal: q.subtotal || 0, agency_commission_percent: q.agencyCommissionPercent || 0,
+    agency_commission_amount: q.agencyCommissionAmount || 0, vat_percent: q.vatPercent || 0,
+    vat_amount: q.vatAmount || 0, total: q.total || 0, advance: q.advance || 0,
+    due: q.due || 0, nb_text: q.nbText || null, terms_json: q.termsAndConditions || [],
+    signatory_name: q.signatoryName || null, signatory_title: q.signatoryTitle || null,
+    signatory_phone: q.signatoryPhone || null, status: q.status, created_at: q.createdAt || new Date().toISOString(),
+  };
+};
+
+const fromQuotationRow = (r: any): Quotation => ({
+  id: r.id, quotationNumber: r.quotation_number, date: r.date, validityDate: r.validity_date || '',
+  clientName: r.client_name, clientCompany: r.client_company || '', subject: r.subject,
+  items: r.items_json || [], subtotal: Number(r.subtotal || 0),
+  agencyCommissionPercent: Number(r.agency_commission_percent || 0),
+  agencyCommissionAmount: Number(r.agency_commission_amount || 0), vatPercent: Number(r.vat_percent || 0),
+  vatAmount: Number(r.vat_amount || 0), total: Number(r.total || 0), advance: Number(r.advance || 0),
+  due: Number(r.due || 0), termsAndConditions: r.terms_json || [], nbText: r.nb_text || '',
+  signatoryName: r.signatory_name || '', signatoryTitle: r.signatory_title || '',
+  signatoryPhone: r.signatory_phone || '', status: r.status || 'Draft',
+  createdAt: r.created_at || new Date().toISOString(),
+});
+
+const toInvoiceRow = (i: Invoice, clients: Client[]) => {
+  const client = clients.find(c => c.companyName === i.clientCompany || c.name === i.clientName);
+  return {
+    id: i.id, invoice_number: i.invoiceNumber, quotation_id: i.quotationId || null,
+    client_id: client?.id || clientIdFor(i.clientName, i.clientCompany), client_name: i.clientName,
+    client_company: i.clientCompany || null, date: i.date, due_date: i.dueDate || null,
+    subject: i.subject, items_json: i.items || [], subtotal: i.subtotal || 0,
+    agency_commission_amount: i.agencyCommissionAmount || 0, vat_amount: i.vatAmount || 0,
+    total: i.total || 0, advance: i.advance || 0, due: i.due || 0,
+    payments_json: i.payments || [], status: i.status, signatory_name: i.signatoryName || null,
+    created_at: i.createdAt || new Date().toISOString(),
+  };
+};
+
+const fromInvoiceRow = (r: any): Invoice => ({
+  id: r.id, invoiceNumber: r.invoice_number, quotationId: r.quotation_id || undefined,
+  date: r.date, clientName: r.client_name, clientCompany: r.client_company || '',
+  subject: r.subject, items: r.items_json || [], subtotal: Number(r.subtotal || 0),
+  agencyCommissionPercent: 0, agencyCommissionAmount: Number(r.agency_commission_amount || 0),
+  vatPercent: 0, vatAmount: Number(r.vat_amount || 0), total: Number(r.total || 0),
+  advance: Number(r.advance || 0), due: Number(r.due || 0), payments: r.payments_json || [],
+  termsAndConditions: [], nbText: '', signatoryName: r.signatory_name || '',
+  signatoryTitle: '', signatoryPhone: '', status: r.status || 'Unpaid',
+  createdAt: r.created_at || new Date().toISOString(),
+});
+
+const toProjectRow = (p: ProjectSchedule, clients: Client[]) => {
+  const client = clients.find(c => c.companyName === p.clientCompany || c.name === p.clientName);
+  return {
+    id: p.id, title: p.projectName, client_id: client?.id || clientIdFor(p.clientName, p.clientCompany),
+    client_name: p.clientName, quotation_id: p.quotationId || null, invoice_id: null,
+    event_date: p.eventDate || '', print_clearance_deadline: p.setupDate || '',
+    installation_deadline: p.setupDate || '', status: p.status, priority: 'Normal',
+    location: p.venue || null, assigned_team_json: p.assignedTeam || [],
+    progress_percent: p.status === 'Completed' ? 100 : 0, created_at: p.createdAt || new Date().toISOString(),
+  };
+};
+
+const fromProjectRow = (r: any): ProjectSchedule => ({
+  id: r.id, quotationId: r.quotation_id || undefined, quotationNumber: '',
+  projectName: r.title, clientName: r.client_name, clientCompany: '',
+  venue: r.location || '', eventDate: r.event_date || '', setupDate: r.installation_deadline || '',
+  status: r.status || 'Upcoming', assignedTeam: r.assigned_team_json || [],
+  checklist: [], workItems: [], instructions: '', createdAt: r.created_at || '',
+});
+
+const toExpenseRow = (e: Expense) => ({
+  id: e.id, date: e.date, title: e.description, category: e.category,
+  project_id: e.projectId || null, supplier_id: null, supplier_name: e.paidTo || null,
+  amount: e.amount || 0, is_paid: true, due_date: null, payment_method: e.paymentMethod || null,
+});
+
+const fromExpenseRow = (r: any): Expense => ({
+  id: r.id, projectId: r.project_id || undefined, quotationId: undefined,
+  expenseType: r.category === 'Office Rent' || r.category === 'Salary' || r.category === 'Utilities' ? 'Office' : 'Project',
+  date: r.date, category: r.category, description: r.title, amount: Number(r.amount || 0),
+  paidTo: r.supplier_name || '', paymentMethod: r.payment_method || '',
+});
+
+const toLiabilityRow = (l: FinancialLiability) => ({
+  id: l.id, supplier_id: l.creditor || l.id, supplier_name: l.creditor || l.title,
+  category: l.title, total_amount: l.totalAmount || 0, paid_amount: l.paidAmount || 0,
+  remaining_liability: Math.max(0, (l.totalAmount || 0) - (l.paidAmount || 0)),
+  due_date: l.dueDate || null, status: l.status, notes: l.notes || null,
+});
+
+const fromLiabilityRow = (r: any): FinancialLiability => ({
+  id: r.id, title: r.category || '', creditor: r.supplier_name || '', totalAmount: Number(r.total_amount || 0),
+  paidAmount: Number(r.paid_amount || 0), dueDate: r.due_date || '', status: r.status || 'Pending', notes: r.notes || '',
+});
+
+export const loadStorageData = () => ({
+  quotations: readLocal(STORAGE_KEYS.QUOTATIONS, INITIAL_QUOTATIONS),
+  invoices: readLocal(STORAGE_KEYS.INVOICES, INITIAL_INVOICES),
+  clients: readLocal(STORAGE_KEYS.CLIENTS, INITIAL_CLIENTS),
+  suppliers: readLocal(STORAGE_KEYS.SUPPLIERS, INITIAL_SUPPLIERS),
+  projects: readLocal(STORAGE_KEYS.PROJECTS, INITIAL_PROJECTS),
+  expenses: readLocal(STORAGE_KEYS.EXPENSES, INITIAL_EXPENSES),
+  liabilities: readLocal(STORAGE_KEYS.LIABILITIES, INITIAL_LIABILITIES),
+  notifications: readLocal(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS),
+  aiProspects: readLocal(STORAGE_KEYS.AI_PROSPECTS, INITIAL_AI_PROSPECTS),
+});
+
+export const hydrateStorageData = async () => {
+  const local = loadStorageData();
+  if (!supabase) return local;
+  try {
+    const results = await Promise.all([
+      supabase.from('clients').select('*').order('created_at', { ascending: true }),
+      supabase.from('suppliers').select('*').order('created_at', { ascending: true }),
+      supabase.from('quotations').select('*').order('created_at', { ascending: false }),
+      supabase.from('invoices').select('*').order('created_at', { ascending: false }),
+      supabase.from('projects').select('*').order('created_at', { ascending: false }),
+      supabase.from('expenses').select('*').order('date', { ascending: false }),
+      supabase.from('financial_liabilities').select('*').order('due_date', { ascending: true }),
+    ]);
+    if (results.some(r => r.error)) throw results.find(r => r.error)?.error;
+    const data = {
+      clients: results[0].data?.map(fromClientRow) || [],
+      suppliers: results[1].data?.map(fromSupplierRow) || [],
+      quotations: results[2].data?.map(fromQuotationRow) || [],
+      invoices: results[3].data?.map(fromInvoiceRow) || [],
+      projects: results[4].data?.map(fromProjectRow) || [],
+      expenses: results[5].data?.map(fromExpenseRow) || [],
+      liabilities: results[6].data?.map(fromLiabilityRow) || [],
+      notifications: local.notifications,
+      aiProspects: local.aiProspects,
+    };
+    Object.entries(data).forEach(([k,v]) => saveLocal(STORAGE_KEYS[k as keyof typeof STORAGE_KEYS], v));
+    return data;
+  } catch (error) {
+    console.error('Supabase hydration failed; using local cache.', error);
+    return local;
+  }
+};
+
+const upsert = async (table: string, rows: any[]) => {
+  if (!supabase || rows.length === 0) return;
+  const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' });
+  if (error) console.error(`Supabase ${table} sync failed:`, error);
+};
+
+export const saveQuotations = (data: Quotation[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.QUOTATIONS, data); void upsert('quotations', data.map(q => toQuotationRow(q, clients))); };
+export const saveInvoices = (data: Invoice[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.INVOICES, data); void upsert('invoices', data.map(i => toInvoiceRow(i, clients))); };
+export const saveClients = (data: Client[]) => { saveLocal(STORAGE_KEYS.CLIENTS, data); void upsert('clients', data.map(toClientRow)); };
+export const saveSuppliers = (data: Supplier[]) => { saveLocal(STORAGE_KEYS.SUPPLIERS, data); void upsert('suppliers', data.map(toSupplierRow)); };
+export const saveProjects = (data: ProjectSchedule[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.PROJECTS, data); void upsert('projects', data.map(p => toProjectRow(p, clients))); };
+export const saveExpenses = (data: Expense[]) => { saveLocal(STORAGE_KEYS.EXPENSES, data); void upsert('expenses', data.map(toExpenseRow)); };
+export const saveLiabilities = (data: FinancialLiability[]) => { saveLocal(STORAGE_KEYS.LIABILITIES, data); void upsert('financial_liabilities', data.map(toLiabilityRow)); };
+export const saveNotifications = (data: AppNotification[]) => saveLocal(STORAGE_KEYS.NOTIFICATIONS, data);
+export const saveAiProspects = (data: AIClientProspect[]) => saveLocal(STORAGE_KEYS.AI_PROSPECTS, data);
+
+export const deleteRemote = async (table: string, id: string) => {
+  if (!supabase) return;
+  const { error } = await supabase.from(table).delete().eq('id', id);
+  if (error) console.error(`Supabase ${table} delete failed:`, error);
+};
