@@ -100,7 +100,7 @@ const toInvoiceRow = (i: Invoice, clients: Client[]) => {
   return {
     id: i.id, invoice_number: i.invoiceNumber, quotation_id: i.quotationId || null,
     client_id: client?.id || clientIdFor(i.clientName, i.clientCompany), client_name: i.clientName,
-    client_company: i.clientCompany || null, date: i.date, due_date: i.dueDate || null,
+    client_company: i.clientCompany || null, date: i.date, due_date: null,
     subject: i.subject, items_json: i.items || [], subtotal: i.subtotal || 0,
     agency_commission_amount: i.agencyCommissionAmount || 0, vat_amount: i.vatAmount || 0,
     total: i.total || 0, advance: i.advance || 0, due: i.due || 0,
@@ -203,7 +203,13 @@ export const hydrateStorageData = async () => {
       notifications: local.notifications,
       aiProspects: local.aiProspects,
     };
-    Object.entries(data).forEach(([k,v]) => saveLocal(STORAGE_KEYS[k as keyof typeof STORAGE_KEYS], v));
+    saveLocal(STORAGE_KEYS.CLIENTS, data.clients);
+    saveLocal(STORAGE_KEYS.SUPPLIERS, data.suppliers);
+    saveLocal(STORAGE_KEYS.QUOTATIONS, data.quotations);
+    saveLocal(STORAGE_KEYS.INVOICES, data.invoices);
+    saveLocal(STORAGE_KEYS.PROJECTS, data.projects);
+    saveLocal(STORAGE_KEYS.EXPENSES, data.expenses);
+    saveLocal(STORAGE_KEYS.LIABILITIES, data.liabilities);
     return data;
   } catch (error) {
     console.error('Supabase hydration failed; using local cache.', error);
