@@ -3,6 +3,7 @@ import {
   loadStorageData,
   hydrateStorageData,
   saveQuotations,
+  saveQuotation,
   saveInvoices,
   saveClients,
   saveClient,
@@ -14,6 +15,7 @@ import {
   saveAiProspects,
   deleteRemote,
   verifyClientCloudRecord,
+  verifyQuotationCloudRecord,
   verifySupplierCloudRecord,
 } from './services/storage';
 import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect, ProjectSchedule, PaymentRecord } from './types';
@@ -76,7 +78,7 @@ export function App() {
     void sync();
   }, [data, isHydrated]);
 
-  const handleSaveQuotation = (q: Quotation) => {
+  const handleSaveQuotation = async (q: Quotation) => {
     const exists = data.quotations.some((item: Quotation) => item.id === q.id);
     const updated = exists ? data.quotations.map((item: Quotation) => (item.id === q.id ? q : item)) : [q, ...data.quotations];
     const newNotif: AppNotification = {
@@ -88,6 +90,17 @@ export function App() {
       type: 'quotation',
     };
     setData({ ...data, quotations: updated, notifications: [newNotif, ...data.notifications] });
+    setCloudStatus({ type: 'success', message: 'Saving quotation to Supabase…' });
+    try {
+      await saveQuotation(q, data.clients);
+      await verifyQuotationCloudRecord(q.id);
+      setCloudStatus({ type: 'success', message: `Cloud Saved ✓ — ${q.quotationNumber}` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown Supabase save error.';
+      console.error('GRAND CMS quotation cloud save failed:', error);
+      setCloudStatus({ type: 'error', message: `Cloud Save Failed — ${message}` });
+    }
+    window.setTimeout(() => setCloudStatus(null), 7000);
   };
 
   const handleApproveAndAdvance = (q: Quotation, payment: PaymentRecord) => {
