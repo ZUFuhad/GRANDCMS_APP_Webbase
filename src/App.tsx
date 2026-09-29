@@ -5,6 +5,7 @@ import {
   saveQuotations,
   saveInvoices,
   saveClients,
+  saveClient,
   saveSuppliers,
   saveProjects,
   saveExpenses,
@@ -55,8 +56,11 @@ export function App() {
       const results = await Promise.allSettled([
         saveQuotations(data.quotations, data.clients),
         saveInvoices(data.invoices, data.clients),
-        saveClients(data.clients),
-        saveSuppliers(data.suppliers),
+        // Clients and suppliers are persisted by their explicit save handlers.
+        // Keeping them out of this full-state effect prevents a stale render
+        // from overwriting a just-saved edit in Supabase.
+        Promise.resolve(),
+        Promise.resolve(),
         saveProjects(data.projects, data.clients),
         saveExpenses(data.expenses),
         saveLiabilities(data.liabilities),
@@ -206,7 +210,7 @@ export function App() {
     setData({ ...data, clients: nextClients });
     setCloudStatus({ type: 'success', message: 'Saving client to Supabase…' });
     try {
-      await saveClients(nextClients);
+      await saveClient(c);
       await verifyClientCloudRecord(c.id);
       setCloudStatus({ type: 'success', message: `Cloud Saved ✓ — ${c.companyName || c.name}` });
     } catch (error) {
