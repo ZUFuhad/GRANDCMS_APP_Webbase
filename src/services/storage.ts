@@ -226,6 +226,36 @@ const upsert = async (table: string, rows: any[]) => {
 };
 
 export const saveQuotations = async (data: Quotation[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.QUOTATIONS, data); await upsert('quotations', data.map(q => toQuotationRow(q, clients))); };
+
+export const saveQuotation = async (quotation: Quotation, clients: Client[] = []) => {
+  const current = readLocal(STORAGE_KEYS.QUOTATIONS, []) as Quotation[];
+  const exists = current.some(item => item.id === quotation.id);
+  saveLocal(STORAGE_KEYS.QUOTATIONS, exists
+    ? current.map(item => item.id === quotation.id ? quotation : item)
+    : [quotation, ...current]);
+
+  if (!supabase) {
+    throw new Error('Supabase is not configured in this deployed build. Check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
+  }
+
+  const { data, error } = await supabase
+    .from('quotations')
+    .upsert(toQuotationRow(quotation, clients), { onConflict: 'id' })
+    .select('id,quotation_number,client_id,total,status,created_at')
+    .single();
+
+  if (error) throw new Error(`Supabase quotations save failed: ${error.message}`);
+  if (!data) throw new Error('Supabase quotations save returned no record.');
+  return data;
+};
+
+export const verifyQuotationCloudRecord = async (id: string) => {
+  if (!supabase) throw new Error('Supabase is not configured in this deployed build.');
+  const { data, error } = await supabase.from('quotations').select('id,quotation_number,client_id,total,status,created_at').eq('id', id).maybeSingle();
+  if (error) throw new Error(`Supabase quotations verification failed: ${error.message}`);
+  if (!data) throw new Error('Supabase accepted the save call but the quotation record could not be read back.');
+  return data;
+};
 export const saveInvoices = async (data: Invoice[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.INVOICES, data); await upsert('invoices', data.map(i => toInvoiceRow(i, clients))); };
 export const saveClients = async (data: Client[]) => {
   saveLocal(STORAGE_KEYS.CLIENTS, data);
