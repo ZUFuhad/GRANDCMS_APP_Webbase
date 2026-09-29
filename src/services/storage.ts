@@ -239,7 +239,18 @@ export const verifyClientCloudRecord = async (id: string) => {
   if (!data) throw new Error('Supabase accepted the save call but the client record could not be read back.');
   return data;
 };
-export const saveSuppliers = async (data: Supplier[]) => { saveLocal(STORAGE_KEYS.SUPPLIERS, data); await upsert('suppliers', data.map(toSupplierRow)); };
+export const saveSuppliers = async (data: Supplier[]) => {
+  saveLocal(STORAGE_KEYS.SUPPLIERS, data);
+  return upsert('suppliers', data.map(toSupplierRow));
+};
+
+export const verifySupplierCloudRecord = async (id: string) => {
+  if (!supabase) throw new Error('Supabase is not configured in this deployed build.');
+  const { data, error } = await supabase.from('suppliers').select('id,name,company_name,phone,email').eq('id', id).maybeSingle();
+  if (error) throw new Error(`Supabase suppliers verification failed: ${error.message}`);
+  if (!data) throw new Error('Supabase accepted the supplier save call but the supplier record could not be read back.');
+  return data;
+};
 export const saveProjects = async (data: ProjectSchedule[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.PROJECTS, data); await upsert('projects', data.map(p => toProjectRow(p, clients))); };
 export const saveExpenses = async (data: Expense[]) => { saveLocal(STORAGE_KEYS.EXPENSES, data); await upsert('expenses', data.map(toExpenseRow)); };
 export const saveLiabilities = async (data: FinancialLiability[]) => { saveLocal(STORAGE_KEYS.LIABILITIES, data); await upsert('financial_liabilities', data.map(toLiabilityRow)); };
