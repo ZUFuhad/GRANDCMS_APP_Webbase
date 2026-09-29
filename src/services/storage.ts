@@ -220,25 +220,24 @@ export const hydrateStorageData = async () => {
 const upsert = async (table: string, rows: any[]) => {
   if (!supabase || rows.length === 0) return;
   const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' });
-  if (error) console.error(`Supabase ${table} sync failed:`, error);
+  if (error) throw new Error(`Supabase ${table} sync failed: ${error.message}`);
 };
 
-export const saveQuotations = (data: Quotation[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.QUOTATIONS, data); void upsert('quotations', data.map(q => toQuotationRow(q, clients))); };
-export const saveInvoices = (data: Invoice[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.INVOICES, data); void upsert('invoices', data.map(i => toInvoiceRow(i, clients))); };
-export const saveClients = (data: Client[]) => { saveLocal(STORAGE_KEYS.CLIENTS, data); void upsert('clients', data.map(toClientRow)); };
-export const saveSuppliers = (data: Supplier[]) => { saveLocal(STORAGE_KEYS.SUPPLIERS, data); void upsert('suppliers', data.map(toSupplierRow)); };
-export const saveProjects = (data: ProjectSchedule[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.PROJECTS, data); void upsert('projects', data.map(p => toProjectRow(p, clients))); };
-export const saveExpenses = (data: Expense[]) => { saveLocal(STORAGE_KEYS.EXPENSES, data); void upsert('expenses', data.map(toExpenseRow)); };
-export const saveLiabilities = (data: FinancialLiability[]) => { saveLocal(STORAGE_KEYS.LIABILITIES, data); void upsert('financial_liabilities', data.map(toLiabilityRow)); };
+export const saveQuotations = async (data: Quotation[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.QUOTATIONS, data); await upsert('quotations', data.map(q => toQuotationRow(q, clients))); };
+export const saveInvoices = async (data: Invoice[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.INVOICES, data); await upsert('invoices', data.map(i => toInvoiceRow(i, clients))); };
+export const saveClients = async (data: Client[]) => { saveLocal(STORAGE_KEYS.CLIENTS, data); await upsert('clients', data.map(toClientRow)); };
+export const saveSuppliers = async (data: Supplier[]) => { saveLocal(STORAGE_KEYS.SUPPLIERS, data); await upsert('suppliers', data.map(toSupplierRow)); };
+export const saveProjects = async (data: ProjectSchedule[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.PROJECTS, data); await upsert('projects', data.map(p => toProjectRow(p, clients))); };
+export const saveExpenses = async (data: Expense[]) => { saveLocal(STORAGE_KEYS.EXPENSES, data); await upsert('expenses', data.map(toExpenseRow)); };
+export const saveLiabilities = async (data: FinancialLiability[]) => { saveLocal(STORAGE_KEYS.LIABILITIES, data); await upsert('financial_liabilities', data.map(toLiabilityRow)); };
 export const saveNotifications = (data: AppNotification[]) => saveLocal(STORAGE_KEYS.NOTIFICATIONS, data);
 export const saveAiProspects = (data: AIClientProspect[]) => saveLocal(STORAGE_KEYS.AI_PROSPECTS, data);
 
 export const deleteRemote = async (table: string, id: string) => {
   if (!supabase) return;
   const { error } = await supabase.from(table).delete().eq('id', id);
-  if (error) console.error(`Supabase ${table} delete failed:`, error);
+  if (error) throw new Error(`Supabase ${table} delete failed: ${error.message}`);
 };
-
 
 export class StorageService {
   static generateCloudflareD1Sql(): string {
