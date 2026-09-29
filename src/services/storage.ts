@@ -218,14 +218,27 @@ export const hydrateStorageData = async () => {
 };
 
 const upsert = async (table: string, rows: any[]) => {
-  if (!supabase || rows.length === 0) return;
+  if (rows.length === 0) return { count: 0 };
+  if (!supabase) throw new Error('Supabase is not configured in this deployed build. Check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
   const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' });
   if (error) throw new Error(`Supabase ${table} sync failed: ${error.message}`);
+  return { count: rows.length };
 };
 
 export const saveQuotations = async (data: Quotation[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.QUOTATIONS, data); await upsert('quotations', data.map(q => toQuotationRow(q, clients))); };
 export const saveInvoices = async (data: Invoice[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.INVOICES, data); await upsert('invoices', data.map(i => toInvoiceRow(i, clients))); };
-export const saveClients = async (data: Client[]) => { saveLocal(STORAGE_KEYS.CLIENTS, data); await upsert('clients', data.map(toClientRow)); };
+export const saveClients = async (data: Client[]) => {
+  saveLocal(STORAGE_KEYS.CLIENTS, data);
+  return upsert('clients', data.map(toClientRow));
+};
+
+export const verifyClientCloudRecord = async (id: string) => {
+  if (!supabase) throw new Error('Supabase is not configured in this deployed build.');
+  const { data, error } = await supabase.from('clients').select('id,company_name,contact_person,phone,email').eq('id', id).maybeSingle();
+  if (error) throw new Error(`Supabase clients verification failed: ${error.message}`);
+  if (!data) throw new Error('Supabase accepted the save call but the client record could not be read back.');
+  return data;
+};
 export const saveSuppliers = async (data: Supplier[]) => { saveLocal(STORAGE_KEYS.SUPPLIERS, data); await upsert('suppliers', data.map(toSupplierRow)); };
 export const saveProjects = async (data: ProjectSchedule[], clients: Client[] = []) => { saveLocal(STORAGE_KEYS.PROJECTS, data); await upsert('projects', data.map(p => toProjectRow(p, clients))); };
 export const saveExpenses = async (data: Expense[]) => { saveLocal(STORAGE_KEYS.EXPENSES, data); await upsert('expenses', data.map(toExpenseRow)); };
