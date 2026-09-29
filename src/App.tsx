@@ -13,6 +13,7 @@ import {
   saveAiProspects,
   deleteRemote,
   verifyClientCloudRecord,
+  verifySupplierCloudRecord,
 } from './services/storage';
 import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect, ProjectSchedule, PaymentRecord } from './types';
 import { DEFAULT_TERMS, GRAND_COMPANY_INFO } from './mock/initialData';
@@ -219,9 +220,23 @@ export function App() {
     setData({ ...data, clients: data.clients.filter((c: Client) => c.id !== id) });
     void deleteRemote('clients', id);
   };
-  const handleSaveSupplier = (s: Supplier) => {
+  const handleSaveSupplier = async (s: Supplier) => {
     const exists = data.suppliers.some((item: Supplier) => item.id === s.id);
-    setData({ ...data, suppliers: exists ? data.suppliers.map((item: Supplier) => item.id === s.id ? s : item) : [s, ...data.suppliers] });
+    const nextSuppliers = exists
+      ? data.suppliers.map((item: Supplier) => item.id === s.id ? s : item)
+      : [s, ...data.suppliers];
+    setData({ ...data, suppliers: nextSuppliers });
+    setCloudStatus({ type: 'success', message: 'Saving supplier to Supabase…' });
+    try {
+      await saveSuppliers(nextSuppliers);
+      await verifySupplierCloudRecord(s.id);
+      setCloudStatus({ type: 'success', message: `Cloud Saved ✓ — ${s.name}` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown Supabase save error.';
+      console.error('GRAND CMS supplier cloud save failed:', error);
+      setCloudStatus({ type: 'error', message: `Cloud Save Failed — ${message}` });
+    }
+    window.setTimeout(() => setCloudStatus(null), 7000);
   };
   const handleDeleteSupplier = (id: string) => {
     setData({ ...data, suppliers: data.suppliers.filter((s: Supplier) => s.id !== id) });
