@@ -233,8 +233,28 @@ export const saveClients = async (data: Client[]) => {
 };
 
 export const saveClient = async (client: Client) => {
-  saveLocal(STORAGE_KEYS.CLIENTS, readLocal(STORAGE_KEYS.CLIENTS, []).map((item: Client) => item.id === client.id ? client : item));
-  return upsert('clients', [toClientRow(client)]);
+  const current = readLocal(STORAGE_KEYS.CLIENTS, []) as Client[];
+  const exists = current.some(item => item.id === client.id);
+  const nextLocal = exists
+    ? current.map(item => item.id === client.id ? client : item)
+    : [client, ...current];
+  saveLocal(STORAGE_KEYS.CLIENTS, nextLocal);
+
+  if (!supabase) {
+    throw new Error('Supabase is not configured in this deployed build. Check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
+  }
+
+  const row = toClientRow(client);
+  const { data, error } = await supabase
+    .from('clients')
+    .upsert(row, { onConflict: 'id' })
+    .select('id,company_name,contact_person,phone,email')
+    .single();
+
+  if (error) throw new Error(`Supabase clients save failed: ${error.message}`);
+  if (!data) throw new Error('Supabase clients save returned no record.');
+
+  return data;
 };
 
 export const verifyClientCloudRecord = async (id: string) => {
