@@ -48,15 +48,25 @@ export function App() {
 
   useEffect(() => {
     if (!isHydrated) return;
-    saveQuotations(data.quotations, data.clients);
-    saveInvoices(data.invoices, data.clients);
-    saveClients(data.clients);
-    saveSuppliers(data.suppliers);
-    saveProjects(data.projects, data.clients);
-    saveExpenses(data.expenses);
-    saveLiabilities(data.liabilities);
-    saveNotifications(data.notifications);
-    saveAiProspects(data.aiProspects);
+    const sync = async () => {
+      const results = await Promise.allSettled([
+        saveQuotations(data.quotations, data.clients),
+        saveInvoices(data.invoices, data.clients),
+        saveClients(data.clients),
+        saveSuppliers(data.suppliers),
+        saveProjects(data.projects, data.clients),
+        saveExpenses(data.expenses),
+        saveLiabilities(data.liabilities),
+      ]);
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error('GRAND CMS Supabase sync failed', { tableIndex: index, error: result.reason });
+        }
+      });
+      saveNotifications(data.notifications);
+      saveAiProspects(data.aiProspects);
+    };
+    void sync();
   }, [data, isHydrated]);
 
   const handleSaveQuotation = (q: Quotation) => {
@@ -187,7 +197,13 @@ export function App() {
 
   const handleSaveClient = (c: Client) => {
     const exists = data.clients.some((item: Client) => item.id === c.id);
-    setData({ ...data, clients: exists ? data.clients.map((item: Client) => item.id === c.id ? c : item) : [c, ...data.clients] });
+    const nextClients = exists
+      ? data.clients.map((item: Client) => item.id === c.id ? c : item)
+      : [c, ...data.clients];
+    setData({ ...data, clients: nextClients });
+    void saveClients(nextClients).catch((error) => {
+      console.error('GRAND CMS client cloud save failed:', error);
+    });
   };
   const handleDeleteClient = (id: string) => {
     setData({ ...data, clients: data.clients.filter((c: Client) => c.id !== id) });
