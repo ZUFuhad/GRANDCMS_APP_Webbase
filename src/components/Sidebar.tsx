@@ -14,6 +14,8 @@ import {
 import { GrandLogo } from './GrandLogo';
 import { LogoUploadModal } from './LogoUploadModal';
 
+export type NavTab = 'dashboard' | 'quotations' | 'invoices' | 'clients' | 'projects' | 'expenses' | 'agentic' | 'generator' | 'agentic_growth';
+
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
