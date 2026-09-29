@@ -238,3 +238,17 @@ export const deleteRemote = async (table: string, id: string) => {
   const { error } = await supabase.from(table).delete().eq('id', id);
   if (error) console.error(`Supabase ${table} delete failed:`, error);
 };
+
+
+export class StorageService {
+  static generateCloudflareD1Sql(): string {
+    return `-- GRAND CMS Cloudflare D1 schema export
+-- Primary production persistence is Supabase PostgreSQL.
+-- This export is intentionally minimal and safe to regenerate.
+CREATE TABLE IF NOT EXISTS grand_cms_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+`;
+  }
+}
