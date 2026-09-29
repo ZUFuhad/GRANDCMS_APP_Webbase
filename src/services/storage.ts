@@ -232,6 +232,11 @@ export const saveClients = async (data: Client[]) => {
   return upsert('clients', data.map(toClientRow));
 };
 
+export const saveClient = async (client: Client) => {
+  saveLocal(STORAGE_KEYS.CLIENTS, readLocal(STORAGE_KEYS.CLIENTS, []).map((item: Client) => item.id === client.id ? client : item));
+  return upsert('clients', [toClientRow(client)]);
+};
+
 export const verifyClientCloudRecord = async (id: string) => {
   if (!supabase) throw new Error('Supabase is not configured in this deployed build.');
   const { data, error } = await supabase.from('clients').select('id,company_name,contact_person,phone,email').eq('id', id).maybeSingle();
