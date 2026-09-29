@@ -12,6 +12,7 @@ import {
   saveNotifications,
   saveAiProspects,
   deleteRemote,
+  verifyClientCloudRecord,
 } from './services/storage';
 import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect, ProjectSchedule, PaymentRecord } from './types';
 import { DEFAULT_TERMS, GRAND_COMPANY_INFO } from './mock/initialData';
@@ -34,6 +35,7 @@ export function App() {
   const [data, setData] = useState(loadStorageData());
   const [isHydrated, setIsHydrated] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<{ document: Quotation | Invoice; type: 'Quotation' | 'Invoice' } | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -195,15 +197,23 @@ export function App() {
     setActiveTab('invoices');
   };
 
-  const handleSaveClient = (c: Client) => {
+  const handleSaveClient = async (c: Client) => {
     const exists = data.clients.some((item: Client) => item.id === c.id);
     const nextClients = exists
       ? data.clients.map((item: Client) => item.id === c.id ? c : item)
       : [c, ...data.clients];
     setData({ ...data, clients: nextClients });
-    void saveClients(nextClients).catch((error) => {
+    setCloudStatus({ type: 'success', message: 'Saving client to Supabase…' });
+    try {
+      await saveClients(nextClients);
+      await verifyClientCloudRecord(c.id);
+      setCloudStatus({ type: 'success', message: `Cloud Saved ✓ — ${c.companyName || c.name}` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown Supabase save error.';
       console.error('GRAND CMS client cloud save failed:', error);
-    });
+      setCloudStatus({ type: 'error', message: `Cloud Save Failed — ${message}` });
+    }
+    window.setTimeout(() => setCloudStatus(null), 7000);
   };
   const handleDeleteClient = (id: string) => {
     setData({ ...data, clients: data.clients.filter((c: Client) => c.id !== id) });
@@ -284,6 +294,11 @@ export function App() {
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => setIsAuthenticated(false)} />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar notifications={data.notifications} onMarkNotificationsRead={handleMarkNotificationsRead} activeTabTitle={getTabTitle()} />
+        {cloudStatus && (
+          <div className={`fixed right-4 top-20 z-[100] max-w-md rounded-xl border px-4 py-3 text-sm shadow-2xl ${cloudStatus.type === 'success' ? 'border-emerald-500/30 bg-emerald-950/95 text-emerald-200' : 'border-red-500/30 bg-red-950/95 text-red-200'}`}>
+            {cloudStatus.message}
+          </div>
+        )}
         <main className="p-4 sm:p-8 flex-1 overflow-y-auto">
           {activeTab === 'dashboard' && <Dashboard quotations={data.quotations} invoices={data.invoices} expenses={data.expenses} clients={data.clients} projects={data.projects} setActiveTab={setActiveTab} />}
           {activeTab === 'quotations' && <QuotationModule quotations={data.quotations} clients={data.clients} onSaveQuotation={handleSaveQuotation} onDeleteQuotation={handleDeleteQuotation} onPreviewQuotation={(q) => setPreviewDoc({ document: q, type: 'Quotation' })} onConvertToInvoice={handleConvertToInvoice} onApproveAndAdvance={handleApproveAndAdvance} />}
