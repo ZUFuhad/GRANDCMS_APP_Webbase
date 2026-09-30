@@ -33,7 +33,7 @@ jobs:
       - name: Build Vite app
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://dbddplawdicokffewuwz.supabase.co' }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || '' }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_cxT_7DYRjNyi5YWZq3n5zQ_LVlsK7br' }}
         run: npm run build
 
       - name: Upload Pages artifact

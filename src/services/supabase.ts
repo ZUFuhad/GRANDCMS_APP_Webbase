@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export const DEFAULT_SUPABASE_PROJECT_ID = 'dbddplawdicokffewuwz';
 export const DEFAULT_SUPABASE_URL = 'https://dbddplawdicokffewuwz.supabase.co';
+export const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_cxT_7DYRjNyi5YWZq3n5zQ_LVlsK7br';
 
 export interface SupabaseConfig {
   url: string;
@@ -85,7 +86,7 @@ export class SupabaseService {
     const localKey = localStorage.getItem('grand_supabase_anon_key')?.trim();
 
     const url = sanitizeSupabaseUrl(localUrl || envUrl || DEFAULT_SUPABASE_URL);
-    const anonKey = (localKey || envKey || '').trim();
+    const anonKey = (localKey || envKey || DEFAULT_SUPABASE_ANON_KEY).trim();
 
     // Auto-repair malformed local storage URL if needed
     if (localUrl && localUrl !== url) {
