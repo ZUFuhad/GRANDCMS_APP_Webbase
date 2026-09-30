@@ -261,6 +261,14 @@ export const DeploymentHub: React.FC = () => {
     handleTestConnection();
   };
 
+  const handleResetToOfficial = () => {
+    SupabaseService.resetToDefaultCredentials();
+    const updated = SupabaseService.getConfig();
+    setSupabaseUrl(updated.url);
+    setSupabaseAnonKey(updated.anonKey);
+    handleTestConnection();
+  };
+
   const handleTestConnection = async () => {
     setIsTesting(true);
     SupabaseService.setCredentials(supabaseUrl, supabaseAnonKey);
@@ -503,6 +511,15 @@ export const DeploymentHub: React.FC = () => {
                 >
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Save Credentials</span>
+                </button>
+
+                <button
+                  onClick={handleResetToOfficial}
+                  className="px-4 py-2 bg-blue-900/60 hover:bg-blue-800 text-blue-200 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer border border-blue-600/50"
+                  title="Reset to official Grand CMS Supabase Project (dbddplawdicokffewuwz)"
+                >
+                  <Database className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Connect Official Supabase</span>
                 </button>
               </div>
 

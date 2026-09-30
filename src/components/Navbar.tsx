@@ -21,16 +21,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const checkDb = async () => {
-    if (!SupabaseService.isConfigured()) {
-      setDbStatus('needs-key');
-      return;
-    }
     setDbStatus('checking');
     try {
       const res = await SupabaseService.testConnection();
-      setDbStatus(res.success ? 'connected' : 'offline');
+      if (res.success) {
+        setDbStatus('connected');
+      } else {
+        // Auto-heal with official default credentials
+        SupabaseService.resetToDefaultCredentials();
+        const retry = await SupabaseService.testConnection();
+        setDbStatus(retry.success ? 'connected' : 'offline');
+      }
     } catch {
-      setDbStatus('offline');
+      SupabaseService.resetToDefaultCredentials();
+      const retry = await SupabaseService.testConnection();
+      setDbStatus(retry.success ? 'connected' : 'offline');
     }
   };
 

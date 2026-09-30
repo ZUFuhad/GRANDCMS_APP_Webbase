@@ -125,6 +125,11 @@ export const fromSupplierRow = (r: any): Supplier => ({
 
 export const toQuotationRow = (q: Quotation, clients: Client[] = []) => {
   const client = clients.find((c) => c.companyName === q.clientCompany || c.name === q.clientName);
+  const subtotal = Number(q.subtotal) || 0;
+  const total = Number(q.total) || 0;
+  const advance = Number(q.advance) || 0;
+  const due = typeof q.due === 'number' ? q.due : Math.max(0, total - advance);
+
   return {
     id: q.id,
     quotation_number: q.quotationNumber,
@@ -134,17 +139,17 @@ export const toQuotationRow = (q: Quotation, clients: Client[] = []) => {
     date: q.date,
     validity_date: q.validityDate || null,
     subject: q.subject,
-    items_json: q.items || [],
-    subtotal: q.subtotal || 0,
-    agency_commission_percent: q.agencyCommissionPercent || 10,
-    agency_commission_amount: q.agencyCommissionAmount || 0,
-    vat_percent: q.vatPercent || 0,
-    vat_amount: q.vatAmount || 0,
-    total: q.total || 0,
-    advance: q.advance || 0,
-    due: q.due || 0,
+    items_json: Array.isArray(q.items) ? q.items : [],
+    subtotal,
+    agency_commission_percent: typeof q.agencyCommissionPercent === 'number' ? q.agencyCommissionPercent : 10,
+    agency_commission_amount: Number(q.agencyCommissionAmount) || 0,
+    vat_percent: typeof q.vatPercent === 'number' ? q.vatPercent : 0,
+    vat_amount: Number(q.vatAmount) || 0,
+    total,
+    advance,
+    due,
     nb_text: q.nbText || null,
-    terms_json: q.termsAndConditions || [],
+    terms_json: Array.isArray(q.termsAndConditions) ? q.termsAndConditions : [],
     signatory_name: q.signatoryName || null,
     signatory_title: q.signatoryTitle || null,
     signatory_phone: q.signatoryPhone || null,
@@ -181,6 +186,11 @@ export const fromQuotationRow = (r: any): Quotation => ({
 
 export const toInvoiceRow = (i: Invoice, clients: Client[] = []) => {
   const client = clients.find((c) => c.companyName === i.clientCompany || c.name === i.clientName);
+  const subtotal = Number(i.subtotal) || 0;
+  const total = Number(i.total) || 0;
+  const advance = Number(i.advance) || 0;
+  const due = typeof i.due === 'number' ? i.due : Math.max(0, total - advance);
+
   return {
     id: i.id,
     invoice_number: i.invoiceNumber,
@@ -189,17 +199,17 @@ export const toInvoiceRow = (i: Invoice, clients: Client[] = []) => {
     client_name: i.clientName,
     client_company: i.clientCompany || null,
     date: i.date,
-    due_date: null,
+    due_date: (i as any).dueDate || null,
     subject: i.subject,
-    items_json: i.items || [],
-    subtotal: i.subtotal || 0,
-    agency_commission_amount: i.agencyCommissionAmount || 0,
-    vat_amount: i.vatAmount || 0,
-    total: i.total || 0,
-    advance: i.advance || 0,
-    due: i.due || 0,
-    payments_json: i.payments || [],
-    status: i.status || 'Unpaid',
+    items_json: Array.isArray(i.items) ? i.items : [],
+    subtotal,
+    agency_commission_amount: Number(i.agencyCommissionAmount) || 0,
+    vat_amount: Number(i.vatAmount) || 0,
+    total,
+    advance,
+    due,
+    payments_json: Array.isArray(i.payments) ? i.payments : [],
+    status: i.status || 'Due',
     signatory_name: i.signatoryName || null,
     created_at: i.createdAt || new Date().toISOString(),
   };
@@ -513,32 +523,89 @@ export const hydrateStorageData = async () => {
       client.from('financial_liabilities').select('*').order('due_date', { ascending: true }),
     ]);
 
-    // If all table queries failed (e.g. schema not executed yet), return local
+    // If all table queries failed (e.g. offline/network), return local
     if (results.every((r) => r.error)) {
+      console.warn('[Supabase Hydrate] Queries failed, using local offline data.');
       return local;
     }
 
-    const fetchedClients = results[0].data && results[0].data.length > 0 ? results[0].data.map(fromClientRow) : local.clients;
-    const fetchedSuppliers = results[1].data && results[1].data.length > 0 ? results[1].data.map(fromSupplierRow) : local.suppliers;
-    const fetchedQuotations = results[2].data && results[2].data.length > 0 ? results[2].data.map(fromQuotationRow) : local.quotations;
-    const fetchedInvoices = results[3].data && results[3].data.length > 0 ? results[3].data.map(fromInvoiceRow) : local.invoices;
-    const fetchedProjects = results[4].data && results[4].data.length > 0 ? results[4].data.map(fromProjectRow) : local.projects;
-    const fetchedExpenses = results[5].data && results[5].data.length > 0 ? results[5].data.map(fromExpenseRow) : local.expenses;
-    const fetchedLiabilities = results[6].data && results[6].data.length > 0 ? results[6].data.map(fromLiabilityRow) : local.liabilities;
+    // 1. Clients Merge
+    const remoteClients = (results[0].data || []).map(fromClientRow);
+    const clientsMap = new Map<string, Client>();
+    local.clients.forEach((c) => clientsMap.set(c.id, c));
+    remoteClients.forEach((c) => clientsMap.set(c.id, c));
+    const mergedClients = Array.from(clientsMap.values());
+
+    // 2. Suppliers Merge
+    const remoteSuppliers = (results[1].data || []).map(fromSupplierRow);
+    const suppliersMap = new Map<string, Supplier>();
+    local.suppliers.forEach((s) => suppliersMap.set(s.id, s));
+    remoteSuppliers.forEach((s) => suppliersMap.set(s.id, s));
+    const mergedSuppliers = Array.from(suppliersMap.values());
+
+    // 3. Quotations Merge (CRITICAL: preserve local quotations 005, 006, 007, 008, 009!)
+    const remoteQuotations = (results[2].data || []).map(fromQuotationRow);
+    const quotationsMap = new Map<string, Quotation>();
+    const remoteQuotNumbers = new Set(remoteQuotations.map((q) => q.quotationNumber));
+    remoteQuotations.forEach((q) => quotationsMap.set(q.id, q));
+
+    const localOnlyQuotations: Quotation[] = [];
+    local.quotations.forEach((q) => {
+      if (!quotationsMap.has(q.id) && !remoteQuotNumbers.has(q.quotationNumber)) {
+        quotationsMap.set(q.id, q);
+        localOnlyQuotations.push(q);
+      }
+    });
+    const mergedQuotations = Array.from(quotationsMap.values());
+
+    // 4. Invoices Merge
+    const remoteInvoices = (results[3].data || []).map(fromInvoiceRow);
+    const invoicesMap = new Map<string, Invoice>();
+    const remoteInvNumbers = new Set(remoteInvoices.map((i) => i.invoiceNumber));
+    remoteInvoices.forEach((i) => invoicesMap.set(i.id, i));
+
+    const localOnlyInvoices: Invoice[] = [];
+    local.invoices.forEach((i) => {
+      if (!invoicesMap.has(i.id) && !remoteInvNumbers.has(i.invoiceNumber)) {
+        invoicesMap.set(i.id, i);
+        localOnlyInvoices.push(i);
+      }
+    });
+    const mergedInvoices = Array.from(invoicesMap.values());
+
+    // 5. Projects Merge
+    const remoteProjects = (results[4].data || []).map(fromProjectRow);
+    const projectsMap = new Map<string, ProjectSchedule>();
+    remoteProjects.forEach((p) => projectsMap.set(p.id, p));
+
+    const localOnlyProjects: ProjectSchedule[] = [];
+    local.projects.forEach((p) => {
+      if (!projectsMap.has(p.id)) {
+        projectsMap.set(p.id, p);
+        localOnlyProjects.push(p);
+      }
+    });
+    const mergedProjects = Array.from(projectsMap.values());
+
+    // 6. Expenses & Liabilities
+    const remoteExpenses = (results[5].data || []).map(fromExpenseRow);
+    const mergedExpenses = remoteExpenses.length > 0 ? remoteExpenses : local.expenses;
+    const remoteLiabilities = (results[6].data || []).map(fromLiabilityRow);
+    const mergedLiabilities = remoteLiabilities.length > 0 ? remoteLiabilities : local.liabilities;
 
     const data = {
-      clients: fetchedClients,
-      suppliers: fetchedSuppliers,
-      quotations: fetchedQuotations,
-      invoices: fetchedInvoices,
-      projects: fetchedProjects,
-      expenses: fetchedExpenses,
-      liabilities: fetchedLiabilities,
+      clients: mergedClients,
+      suppliers: mergedSuppliers,
+      quotations: mergedQuotations,
+      invoices: mergedInvoices,
+      projects: mergedProjects,
+      expenses: mergedExpenses,
+      liabilities: mergedLiabilities,
       notifications: local.notifications,
       aiProspects: local.aiProspects,
     };
 
-    // Update local cache
+    // Update local storage
     localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(data.clients));
     localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(data.suppliers));
     localStorage.setItem(STORAGE_KEYS.QUOTATIONS, JSON.stringify(data.quotations));
@@ -547,27 +614,63 @@ export const hydrateStorageData = async () => {
     localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(data.expenses));
     localStorage.setItem(STORAGE_KEYS.LIABILITIES, JSON.stringify(data.liabilities));
 
+    // AUTO-SYNC: If there were local-only items created while offline, upload them now!
+    if (localOnlyQuotations.length > 0) {
+      console.log(`[Supabase Auto-Sync] Syncing ${localOnlyQuotations.length} offline quotations to Supabase...`);
+      upsertRemote('quotations', localOnlyQuotations.map((q) => toQuotationRow(q, mergedClients)));
+    }
+    if (localOnlyInvoices.length > 0) {
+      upsertRemote('invoices', localOnlyInvoices.map((i) => toInvoiceRow(i, mergedClients)));
+    }
+    if (localOnlyProjects.length > 0) {
+      upsertRemote('projects', localOnlyProjects.map((p) => toProjectRow(p, mergedClients)));
+    }
+
     return data;
   } catch (error) {
-    console.warn('Supabase hydration skipped/failed; using local cache.', error);
+    console.warn('[Supabase Hydrate] Exception; preserving local data.', error);
     return local;
   }
 };
 
-const upsertRemote = async (table: string, rows: any[]) => {
+export const upsertRemote = async (table: string, rows: any[]) => {
   if (rows.length === 0) return { count: 0 };
   const client = SupabaseService.getClient();
-  if (!client) return { count: 0, error: 'Supabase client not initialized' };
+  if (!client) {
+    console.warn(`[Supabase Sync] Client not configured for table ${table}`);
+    return { count: 0, error: 'Supabase client not configured' };
+  }
 
   try {
+    // 1. First attempt fast batch upsert
     const { error } = await client.from(table).upsert(rows, { onConflict: 'id' });
-    if (error) {
-      console.error(`Supabase ${table} sync error: ${error.message}`, error);
-      return { count: 0, error: error.message };
+    if (!error) {
+      console.log(`[Supabase Sync] Successfully saved ${rows.length} rows to ${table}`);
+      return { count: rows.length };
     }
-    return { count: rows.length };
-  } catch (err) {
-    console.error(`Supabase upsert exception on ${table}:`, err);
+
+    // 2. If batch failed, fall back to row-by-row so one bad row doesn't break others
+    console.warn(`[Supabase Sync] Batch upsert to ${table} notice (${error.message}). Saving row-by-row...`);
+    let saved = 0;
+    let lastErr = error.message;
+
+    for (const r of rows) {
+      try {
+        const single = await client.from(table).upsert([r], { onConflict: 'id' });
+        if (!single.error) {
+          saved++;
+        } else {
+          lastErr = single.error.message;
+          console.error(`[Supabase Sync] Row ${r.id} in ${table} error:`, single.error.message);
+        }
+      } catch (rowErr: any) {
+        lastErr = rowErr?.message || String(rowErr);
+      }
+    }
+
+    return { count: saved, error: saved > 0 ? null : lastErr };
+  } catch (err: any) {
+    console.error(`[Supabase Sync] Exception on ${table}:`, err);
     return { count: 0, error: String(err) };
   }
 };
@@ -583,6 +686,31 @@ export const deleteRemote = async (table: string, id: string) => {
   } catch (err) {
     console.warn(`Supabase delete exception on ${table}:`, err);
   }
+};
+
+export const saveSingleQuotationRemote = async (q: Quotation, clients: Client[] = []) => {
+  const row = toQuotationRow(q, clients);
+  return await upsertRemote('quotations', [row]);
+};
+
+export const saveSingleInvoiceRemote = async (inv: Invoice, clients: Client[] = []) => {
+  const row = toInvoiceRow(inv, clients);
+  return await upsertRemote('invoices', [row]);
+};
+
+export const saveSingleClientRemote = async (c: Client) => {
+  const row = toClientRow(c);
+  return await upsertRemote('clients', [row]);
+};
+
+export const saveSingleSupplierRemote = async (s: Supplier) => {
+  const row = toSupplierRow(s);
+  return await upsertRemote('suppliers', [row]);
+};
+
+export const saveSingleProjectRemote = async (p: ProjectSchedule, clients: Client[] = []) => {
+  const row = toProjectRow(p, clients);
+  return await upsertRemote('projects', [row]);
 };
 
 export const saveQuotations = (data: Quotation[], clients: Client[] = []) => {

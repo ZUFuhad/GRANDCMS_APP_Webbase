@@ -12,6 +12,11 @@ import {
   saveNotifications,
   saveAiProspects,
   deleteRemote,
+  saveSingleQuotationRemote,
+  saveSingleInvoiceRemote,
+  saveSingleClientRemote,
+  saveSingleSupplierRemote,
+  saveSingleProjectRemote,
 } from './services/storage';
 import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect, ProjectSchedule } from './types';
 import { DEFAULT_TERMS, GRAND_COMPANY_INFO } from './mock/initialData';
@@ -80,8 +85,8 @@ export function App() {
 
     const newNotif: AppNotification = {
       id: `notif-${Date.now()}`,
-      title: 'Quotation Updated/Created',
-      message: `Quotation ${q.quotationNumber} for ${q.clientName} saved.`,
+      title: 'Quotation Saved & Synced',
+      message: `Quotation ${q.quotationNumber} for ${q.clientName} saved to database.`,
       timestamp: new Date().toLocaleString(),
       read: false,
       type: 'quotation',
@@ -92,6 +97,11 @@ export function App() {
       quotations: updated,
       notifications: [newNotif, ...data.notifications],
     });
+
+    // Immediate direct sync to Supabase
+    saveSingleQuotationRemote(q, data.clients).catch((err) =>
+      console.warn('Direct quotation sync error:', err)
+    );
   };
 
   const handleDeleteQuotation = (id: string) => {
@@ -112,6 +122,10 @@ export function App() {
       ...data,
       invoices: updated,
     });
+
+    saveSingleInvoiceRemote(inv, data.clients).catch((err) =>
+      console.warn('Direct invoice sync error:', err)
+    );
   };
 
   const handleDeleteInvoice = (id: string) => {
@@ -280,6 +294,10 @@ export function App() {
       ...data,
       projects: updated,
     });
+
+    saveSingleProjectRemote(p, data.clients).catch((err) =>
+      console.warn('Direct project sync error:', err)
+    );
   };
 
   const handleDeleteProject = (id: string) => {
@@ -421,6 +439,14 @@ export function App() {
 
     // 2. Open invoice preview immediately so user instantly sees the full generated tax invoice
     setPreviewDoc({ document: targetInvoice, type: 'Invoice' });
+
+    // 3. Immediately persist both project completion and new invoice to Supabase
+    saveSingleProjectRemote(updatedProject, data.clients).catch((err) =>
+      console.warn('Direct project completion sync error:', err)
+    );
+    saveSingleInvoiceRemote(targetInvoice, data.clients).catch((err) =>
+      console.warn('Direct generated invoice sync error:', err)
+    );
   };
 
   const handleSaveClient = (c: Client) => {
@@ -432,6 +458,9 @@ export function App() {
       ...data,
       clients: updated,
     });
+    saveSingleClientRemote(c).catch((err) =>
+      console.warn('Direct client sync error:', err)
+    );
   };
 
   const handleDeleteClient = (id: string) => {
@@ -451,6 +480,9 @@ export function App() {
       ...data,
       suppliers: updated,
     });
+    saveSingleSupplierRemote(s).catch((err) =>
+      console.warn('Direct supplier sync error:', err)
+    );
   };
 
   const handleDeleteSupplier = (id: string) => {

@@ -32,6 +32,12 @@ export function sanitizeSupabaseUrl(rawUrl?: string | null): string {
     return DEFAULT_SUPABASE_URL;
   }
 
+  // If user pasted dashboard URL, e.g. "https://supabase.com/dashboard/project/dbddplawdicokffewuwz/editor/..."
+  const dashboardMatch = clean.match(/project\/([a-z0-9_-]{10,60})/i);
+  if (dashboardMatch && dashboardMatch[1]) {
+    return `https://${dashboardMatch[1]}.supabase.co`;
+  }
+
   // If user entered only project ref, e.g. "dbddplawdicokffewuwz"
   if (/^[a-z0-9_-]{12,50}$/i.test(clean)) {
     return `https://${clean}.supabase.co`;
@@ -47,11 +53,19 @@ export function sanitizeSupabaseUrl(rawUrl?: string | null): string {
     clean = `https://${clean}`;
   }
 
-  // Remove trailing slashes
+  // Remove trailing slashes and any dashboard path fragments
   clean = clean.replace(/\/+$/, '');
+  try {
+    const parsed = new URL(clean);
+    if (parsed.hostname.endsWith('.supabase.co')) {
+      return `https://${parsed.hostname}`;
+    }
+  } catch {
+    // ignore
+  }
 
   // Validate using URL parser
-  if (isValidHttpUrl(clean)) {
+  if (isValidHttpUrl(clean) && clean.includes('.supabase.co')) {
     return clean;
   }
 
@@ -85,8 +99,23 @@ export class SupabaseService {
     const localUrl = localStorage.getItem('grand_supabase_url')?.trim();
     const localKey = localStorage.getItem('grand_supabase_anon_key')?.trim();
 
-    const url = sanitizeSupabaseUrl(localUrl || envUrl || DEFAULT_SUPABASE_URL);
-    const anonKey = (localKey || envKey || DEFAULT_SUPABASE_ANON_KEY).trim();
+    let url = sanitizeSupabaseUrl(localUrl || envUrl || DEFAULT_SUPABASE_URL);
+    let anonKey = (localKey || envKey || DEFAULT_SUPABASE_ANON_KEY).trim();
+
+    // Auto-heal if invalid or corrupted in localStorage
+    if (!anonKey || anonKey === 'undefined' || anonKey === 'null' || anonKey.length < 25) {
+      anonKey = DEFAULT_SUPABASE_ANON_KEY;
+      try {
+        localStorage.setItem('grand_supabase_anon_key', DEFAULT_SUPABASE_ANON_KEY);
+      } catch {}
+    }
+
+    if (!url || !url.includes('.supabase.co')) {
+      url = DEFAULT_SUPABASE_URL;
+      try {
+        localStorage.setItem('grand_supabase_url', DEFAULT_SUPABASE_URL);
+      } catch {}
+    }
 
     // Auto-repair malformed local storage URL if needed
     if (localUrl && localUrl !== url) {
@@ -120,6 +149,17 @@ export class SupabaseService {
     lastKey = '';
 
     // Dispatch event so all components react immediately
+    window.dispatchEvent(new CustomEvent('grand-supabase-config-changed'));
+  }
+
+  static resetToDefaultCredentials() {
+    try {
+      localStorage.setItem('grand_supabase_url', DEFAULT_SUPABASE_URL);
+      localStorage.setItem('grand_supabase_anon_key', DEFAULT_SUPABASE_ANON_KEY);
+    } catch {}
+    cachedClient = null;
+    lastUrl = '';
+    lastKey = '';
     window.dispatchEvent(new CustomEvent('grand-supabase-config-changed'));
   }
 
@@ -219,7 +259,25 @@ export class SupabaseService {
 
     try {
       // Test querying clients table
-      const { data, error } = await client.from('clients').select('id, name').limit(1);
+      let { data, error } = await client.from('clients').select('id, name').limit(1);
+
+      // If failed and current config differs from defaults, auto-heal using official defaults
+      if (error && (config.url !== DEFAULT_SUPABASE_URL || config.anonKey !== DEFAULT_SUPABASE_ANON_KEY)) {
+        console.warn('Custom credentials failed; auto-healing with official Grand CMS defaults...');
+        this.resetToDefaultCredentials();
+        const healedClient = this.getClient();
+        if (healedClient) {
+          const retry = await healedClient.from('clients').select('id, name').limit(1);
+          if (!retry.error) {
+            return {
+              success: true,
+              message: 'Connected to official Grand CMS Supabase database (auto-healed from local cache)!',
+              details: { count: retry.data?.length || 0 },
+            };
+          }
+          error = retry.error;
+        }
+      }
 
       if (error) {
         // Check if table does not exist
