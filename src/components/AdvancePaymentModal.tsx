@@ -20,8 +20,6 @@ export const AdvancePaymentModal: React.FC<AdvancePaymentModalProps> = ({
   onClose,
   onSaveAdvance,
 }) => {
-  if (!isOpen) return null;
-
   const currentAdvance = quotation.advance || 0;
   const currentDue = quotation.due !== undefined ? quotation.due : Math.max(0, quotation.total - currentAdvance);
 
@@ -74,6 +72,8 @@ export const AdvancePaymentModal: React.FC<AdvancePaymentModalProps> = ({
 
     onSaveAdvance(updatedQuotation, newPayment, autoConvertInvoice);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#07101C]/90 backdrop-blur-sm flex justify-center items-center p-3 sm:p-6">

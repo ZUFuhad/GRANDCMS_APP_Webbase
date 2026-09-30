@@ -381,27 +381,31 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
       </div>
 
       {/* 1. Modal: Create New Standalone / Extra Invoice */}
-      <CreateInvoiceModal
-        isOpen={isCreateInvoiceOpen}
-        onClose={() => setIsCreateInvoiceOpen(false)}
-        onSave={(newInv) => {
-          onSaveInvoice(newInv);
-          // Immediately preview the created invoice
-          onPreviewInvoice(newInv);
-        }}
-        clients={clients}
-        quotations={quotations}
-        invoicesCount={invoices.length}
-      />
+      {isCreateInvoiceOpen && (
+        <CreateInvoiceModal
+          isOpen={isCreateInvoiceOpen}
+          onClose={() => setIsCreateInvoiceOpen(false)}
+          onSave={(newInv) => {
+            onSaveInvoice(newInv);
+            // Immediately preview the created invoice
+            onPreviewInvoice(newInv);
+          }}
+          clients={clients}
+          quotations={quotations}
+          invoicesCount={invoices.length}
+        />
+      )}
 
       {/* 2. Modal: Add Cash / Money Receipt */}
-      <CreateCashReceiptModal
-        isOpen={isCreateReceiptOpen}
-        onClose={() => setIsCreateReceiptOpen(false)}
-        onSaveReceipt={handleSaveCashReceipt}
-        invoices={invoices}
-        clients={clients}
-      />
+      {isCreateReceiptOpen && (
+        <CreateCashReceiptModal
+          isOpen={isCreateReceiptOpen}
+          onClose={() => setIsCreateReceiptOpen(false)}
+          onSaveReceipt={handleSaveCashReceipt}
+          invoices={invoices}
+          clients={clients}
+        />
+      )}
 
       {/* 3. Modal: Quick Payment on Table Row */}
       {payingInvoice && (

@@ -31,8 +31,6 @@ export const CreateCashReceiptModal: React.FC<CreateCashReceiptModalProps> = ({
   invoices,
   clients,
 }) => {
-  if (!isOpen) return null;
-
   const today = new Date().toISOString().split('T')[0];
   const autoReceiptNo = `GCMS/MR/2026/${String(Math.floor(Math.random() * 899) + 101)}`;
 
@@ -112,6 +110,8 @@ export const CreateCashReceiptModal: React.FC<CreateCashReceiptModalProps> = ({
     });
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">

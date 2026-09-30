@@ -20,8 +20,6 @@ export const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({
   quotations,
   invoicesCount,
 }) => {
-  if (!isOpen) return null;
-
   const defaultInvoiceNumber = `GCMS/INV/2026/${String(invoicesCount + 1).padStart(3, '0')}`;
   const today = new Date().toISOString().split('T')[0];
   const defaultDueDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -194,6 +192,8 @@ export const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({
     onSave(newInvoice);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
