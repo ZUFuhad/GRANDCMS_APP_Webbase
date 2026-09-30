@@ -13,6 +13,7 @@ interface QuotationPrintViewProps {
   type: 'Quotation' | 'Invoice';
   onClose?: () => void;
   onConvertToInvoice?: (quotation: Quotation) => void;
+  onApproveAndSchedule?: (quotation: Quotation) => void;
 }
 
 export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
@@ -20,6 +21,7 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
   type,
   onClose,
   onConvertToInvoice,
+  onApproveAndSchedule,
 }) => {
   const [isLogoModalOpen, setIsLogoModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -258,6 +260,19 @@ export const QuotationPrintView: React.FC<QuotationPrintViewProps> = ({
               <MessageSquare className="w-3.5 h-3.5" />
               WhatsApp
             </button>
+            {!isInvoice && onApproveAndSchedule && (
+              <button
+                onClick={() => {
+                  onApproveAndSchedule(document as Quotation);
+                  if (onClose) onClose();
+                }}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                title="Approve this quotation and move directly to Project Scheduling"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Approve & Go to Project</span>
+              </button>
+            )}
             {!isInvoice && onConvertToInvoice && (
               <button
                 onClick={() => onConvertToInvoice(document as Quotation)}

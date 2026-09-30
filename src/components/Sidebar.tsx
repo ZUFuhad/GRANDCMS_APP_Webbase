@@ -10,11 +10,10 @@ import {
   Sparkles,
   LogOut,
   Upload,
+  Database,
 } from 'lucide-react';
 import { GrandLogo } from './GrandLogo';
 import { LogoUploadModal } from './LogoUploadModal';
-
-export type NavTab = 'dashboard' | 'quotations' | 'invoices' | 'clients' | 'projects' | 'expenses' | 'agentic' | 'generator' | 'agentic_growth';
 
 interface SidebarProps {
   activeTab: string;
@@ -33,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLog
     { id: 'expenses', label: 'Expenses & Liabilities', icon: WalletCards },
     { id: 'agentic', label: 'AI Prospecting', icon: TrendingUp },
     { id: 'generator', label: 'AI Design Gen', icon: Sparkles },
+    { id: 'database', label: 'Database & Cloud', icon: Database },
   ];
 
   return (

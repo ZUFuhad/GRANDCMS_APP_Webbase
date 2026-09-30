@@ -2,6 +2,9 @@
 -- GRAND CMS - Supabase (PostgreSQL) Database Schema & Seed Data
 -- Agency: GRAND Communication & Marketing (EST. 2004)
 -- Address: 20 No Shop CDA Market, Kazir Dewri, Chattogram
+-- Target Project ID: dbddplawdicokffewuwz
+-- Dashboard: https://supabase.com/dashboard/project/dbddplawdicokffewuwz
+-- SQL Editor: https://supabase.com/dashboard/project/dbddplawdicokffewuwz/sql
 -- ==========================================================
 
 -- 1. Clients Table
@@ -99,6 +102,7 @@ CREATE TABLE IF NOT EXISTS projects (
   title TEXT NOT NULL,
   client_id TEXT NOT NULL,
   client_name TEXT NOT NULL,
+  client_company TEXT,
   quotation_id TEXT,
   invoice_id TEXT,
   event_date TEXT NOT NULL,
@@ -108,6 +112,7 @@ CREATE TABLE IF NOT EXISTS projects (
   priority TEXT DEFAULT 'Medium',
   location TEXT,
   assigned_team_json JSONB DEFAULT '[]'::jsonb,
+  checklist_json JSONB DEFAULT '[]'::jsonb,
   progress_percent INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -143,7 +148,7 @@ CREATE TABLE IF NOT EXISTS financial_liabilities (
   notes TEXT
 );
 
--- Disable Row Level Security (RLS) so the app can read/write without auth blockers
+-- 8. Disable Row Level Security (RLS) so the app can read/write with anon key
 ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE quotations DISABLE ROW LEVEL SECURITY;
@@ -152,7 +157,7 @@ ALTER TABLE projects DISABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
 ALTER TABLE financial_liabilities DISABLE ROW LEVEL SECURITY;
 
--- Initial Seed Data
+-- 9. Initial Seed Data (Safe Upsert)
 INSERT INTO clients (id, name, company_name, email, phone, address, city, contact_person, designation, total_billed, total_paid, current_due, status)
 VALUES 
 ('cli-whiz', 'Whiz Communication', 'Whiz Communication Ltd.', 'events@whizcomm.com.bd', '+880 1711 987654', 'Finlay Square, 6th Floor, GEC Circle', 'Chattogram', 'Tanvir Hossain', 'Head of Brand Operations', 178200, 80000, 98200, 'active'),

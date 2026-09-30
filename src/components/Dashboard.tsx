@@ -12,17 +12,22 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
-  quotations,
-  invoices,
-  expenses,
-  clients,
-  projects,
+  quotations = [],
+  invoices = [],
+  expenses = [],
+  clients = [],
+  projects = [],
   setActiveTab,
 }) => {
-  const totalBilled = invoices.reduce((acc, inv) => acc + inv.total, 0);
-  const totalCollected = invoices.reduce((acc, inv) => acc + inv.advance, 0);
-  const totalDue = invoices.reduce((acc, inv) => acc + inv.due, 0);
-  const totalExpenses = expenses.reduce((acc, exp) => acc + exp.amount, 0);
+  const safeInvoices = Array.isArray(invoices) ? invoices : [];
+  const safeQuotations = Array.isArray(quotations) ? quotations : [];
+  const safeExpenses = Array.isArray(expenses) ? expenses : [];
+  const safeProjects = Array.isArray(projects) ? projects : [];
+
+  const totalBilled = safeInvoices.reduce((acc, inv) => acc + (Number(inv?.total) || 0), 0);
+  const totalCollected = safeInvoices.reduce((acc, inv) => acc + (Number(inv?.advance) || 0), 0);
+  const totalDue = safeInvoices.reduce((acc, inv) => acc + (Number(inv?.due) || 0), 0);
+  const totalExpenses = safeExpenses.reduce((acc, exp) => acc + (Number(exp?.amount) || 0), 0);
 
   const stats = [
     {
@@ -114,20 +119,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           <div className="space-y-3">
-            {quotations.slice(0, 4).map((q) => (
+            {safeQuotations.slice(0, 4).map((q) => (
               <div key={q.id} className="p-3.5 rounded-xl bg-[#07101C] border border-slate-800 flex items-center justify-between hover:border-slate-700 transition-colors">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-white">{q.quotationNumber}</span>
+                    <span className="font-bold text-xs text-white">{q.quotationNumber || 'GCMS/QT/2026/001'}</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-800 font-semibold">
-                      {q.status}
+                      {q.status || 'Sent'}
                     </span>
                   </div>
-                  <p className="text-xs font-semibold text-slate-300 mt-1">{q.clientName}</p>
-                  <p className="text-[11px] text-slate-500">{q.subject} • {q.date}</p>
+                  <p className="text-xs font-semibold text-slate-300 mt-1">{q.clientName || 'Client'}</p>
+                  <p className="text-[11px] text-slate-500">{q.subject || ''} • {q.date || ''}</p>
                 </div>
                 <div className="text-right">
-                  <span className="font-black text-xs text-amber-400">৳ {q.total.toLocaleString()}/-</span>
+                  <span className="font-black text-xs text-amber-400">৳ {(Number(q.total) || 0).toLocaleString()}/-</span>
                 </div>
               </div>
             ))}
@@ -151,15 +156,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           <div className="space-y-3">
-            {projects.slice(0, 4).map((p) => (
+            {safeProjects.slice(0, 4).map((p) => (
               <div key={p.id} className="p-3.5 rounded-xl bg-[#07101C] border border-slate-800 flex items-center justify-between hover:border-slate-700 transition-colors">
                 <div>
-                  <h4 className="font-bold text-xs text-white">{p.projectName}</h4>
-                  <p className="text-xs font-semibold text-slate-300 mt-0.5">Client: {p.clientName}</p>
-                  <p className="text-[11px] text-slate-500">Venue: {p.venue} • Event: {p.eventDate}</p>
+                  <h4 className="font-bold text-xs text-white">{p.projectName || 'Project'}</h4>
+                  <p className="text-xs font-semibold text-slate-300 mt-0.5">Client: {p.clientName || 'Client'}</p>
+                  <p className="text-[11px] text-slate-500">Venue: {p.venue || 'Chattogram'} • Event: {p.eventDate || ''}</p>
                 </div>
                 <span className="text-[10px] px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 font-bold">
-                  {p.status}
+                  {p.status || 'Active'}
                 </span>
               </div>
             ))}

@@ -1,20 +1,45 @@
-import React, { useState } from 'react';
-import { Bell, Search, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, Search, ShieldCheck, Database, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { AppNotification } from '../types';
+import { SupabaseService } from '../services/supabase';
 
 interface NavbarProps {
   notifications: AppNotification[];
   onMarkNotificationsRead: () => void;
   activeTabTitle: string;
+  onNavigateToDatabase?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   notifications,
   onMarkNotificationsRead,
   activeTabTitle,
+  onNavigateToDatabase,
 }) => {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [dbStatus, setDbStatus] = useState<'connected' | 'checking' | 'offline' | 'needs-key'>('checking');
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const checkDb = async () => {
+    if (!SupabaseService.isConfigured()) {
+      setDbStatus('needs-key');
+      return;
+    }
+    setDbStatus('checking');
+    try {
+      const res = await SupabaseService.testConnection();
+      setDbStatus(res.success ? 'connected' : 'offline');
+    } catch {
+      setDbStatus('offline');
+    }
+  };
+
+  useEffect(() => {
+    checkDb();
+    const handleConfigChange = () => checkDb();
+    window.addEventListener('grand-supabase-config-changed', handleConfigChange);
+    return () => window.removeEventListener('grand-supabase-config-changed', handleConfigChange);
+  }, []);
 
   return (
     <header className="h-16 bg-[#0B192C] border-b border-slate-800 px-6 flex items-center justify-between sticky top-0 z-30 shadow-md">
@@ -28,13 +53,48 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        {/* Supabase Status Pill */}
+        <button
+          onClick={onNavigateToDatabase}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+            dbStatus === 'connected'
+              ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300 hover:bg-emerald-950/60'
+              : dbStatus === 'checking'
+              ? 'bg-blue-950/40 border-blue-500/50 text-blue-300'
+              : dbStatus === 'needs-key'
+              ? 'bg-amber-950/40 border-amber-500/50 text-amber-300 hover:bg-amber-950/60'
+              : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+          }`}
+          title="Supabase PostgreSQL database status - Click to configure or view SQL schema"
+        >
+          <Database className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span className="hidden sm:inline">
+            {dbStatus === 'connected'
+              ? 'Supabase: Live'
+              : dbStatus === 'checking'
+              ? 'Connecting...'
+              : dbStatus === 'needs-key'
+              ? 'Link Supabase'
+              : 'Offline Cache'}
+          </span>
+          <span
+            className={`w-2 h-2 rounded-full ${
+              dbStatus === 'connected'
+                ? 'bg-emerald-400 animate-pulse'
+                : dbStatus === 'checking'
+                ? 'bg-blue-400 animate-ping'
+                : 'bg-amber-400'
+            }`}
+          />
+        </button>
+
         {/* Search */}
-        <div className="hidden sm:flex items-center bg-[#07101C] rounded-xl px-3 py-1.5 w-64 border border-slate-800">
+        <div className="hidden lg:flex items-center bg-[#07101C] rounded-xl px-3 py-1.5 w-56 border border-slate-800">
           <Search className="w-4 h-4 text-slate-400 mr-2" />
           <input
             type="text"
-            placeholder="Search clients, quotations..."
+            placeholder="Search quotations..."
             className="bg-transparent text-xs text-slate-100 placeholder-slate-500 focus:outline-none w-full"
           />
         </div>

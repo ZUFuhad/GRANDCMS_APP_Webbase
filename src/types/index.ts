@@ -98,6 +98,7 @@ export interface Client {
 export interface Supplier {
   id: string;
   name: string;
+  companyName?: string;
   serviceCategory: string;
   productsProvided?: string[];
   contactPerson: string;
@@ -115,33 +116,44 @@ export interface Supplier {
 
 export interface ProjectSchedule {
   id: string;
-  quotationId?: string;
-  quotationNumber?: string;
   projectName: string;
   clientName: string;
-  clientCompany?: string;
   venue: string;
   eventDate: string;
   setupDate: string;
   status: 'Upcoming' | 'In Progress' | 'Completed' | 'Cancelled';
   assignedTeam: string[];
   checklist: { task: string; completed: boolean }[];
-  workItems?: QuotationItem[];
-  instructions?: string;
+  quotationId?: string;
+  quotationNumber?: string;
+  clientCompany?: string;
+  clientAddress?: string;
+  clientPhone?: string;
+  subject?: string;
+  items?: QuotationItem[];
+  subtotal?: number;
+  agencyCommissionPercent?: number;
+  agencyCommissionAmount?: number;
+  vatPercent?: number;
+  vatAmount?: number;
+  totalAmount?: number;
+  advance?: number;
+  due?: number;
+  invoiceId?: string;
   createdAt?: string;
 }
 
 export interface Expense {
   id: string;
-  projectId?: string;
-  quotationId?: string;
-  expenseType?: 'Project' | 'Office';
   date: string;
   category: 'Production' | 'Transport' | 'Office Rent' | 'Salary' | 'Marketing' | 'Utilities' | 'Misc';
   description: string;
   amount: number;
   paidTo: string;
   paymentMethod: string;
+  projectId?: string;
+  quotationId?: string;
+  expenseType?: 'Project' | 'Office';
 }
 
 export interface FinancialLiability {

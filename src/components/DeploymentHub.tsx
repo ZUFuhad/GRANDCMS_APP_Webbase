@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { StorageService } from '../services/storage';
 import { SupabaseService } from '../services/supabase';
+import { loadStorageData, syncAllLocalToSupabase, hydrateStorageData } from '../services/storage';
 import {
-  CloudUpload,
   Database,
   Globe,
   Copy,
@@ -11,7 +10,6 @@ import {
   Terminal,
   ExternalLink,
   Code2,
-  Layers,
   Sparkles,
   ShieldCheck,
   Key,
@@ -22,12 +20,31 @@ import {
   CheckCircle2,
   FolderArchive,
   ArrowRight,
+  CloudUpload,
+  Lock,
 } from 'lucide-react';
+
+const GithubIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+    />
+  </svg>
+);
+
+const SUPABASE_PROJECT_ID = 'dbddplawdicokffewuwz';
+const SUPABASE_DEFAULT_URL = 'https://dbddplawdicokffewuwz.supabase.co';
+const GITHUB_REPO_URL = 'https://github.com/ZUFuhad/GRANDCMS_APP_Webbase';
 
 const SUPABASE_SQL = `-- ==========================================================
 -- GRAND CMS - Supabase (PostgreSQL) Database Schema & Seed Data
 -- Agency: GRAND Communication & Marketing (EST. 2004)
 -- Address: 20 No Shop CDA Market, Kazir Dewri, Chattogram
+-- Target Project ID: dbddplawdicokffewuwz
+-- Dashboard: https://supabase.com/dashboard/project/dbddplawdicokffewuwz
+-- SQL Editor: https://supabase.com/dashboard/project/dbddplawdicokffewuwz/sql
 -- ==========================================================
 
 -- 1. Clients Table
@@ -125,6 +142,7 @@ CREATE TABLE IF NOT EXISTS projects (
   title TEXT NOT NULL,
   client_id TEXT NOT NULL,
   client_name TEXT NOT NULL,
+  client_company TEXT,
   quotation_id TEXT,
   invoice_id TEXT,
   event_date TEXT NOT NULL,
@@ -134,6 +152,7 @@ CREATE TABLE IF NOT EXISTS projects (
   priority TEXT DEFAULT 'Medium',
   location TEXT,
   assigned_team_json JSONB DEFAULT '[]'::jsonb,
+  checklist_json JSONB DEFAULT '[]'::jsonb,
   progress_percent INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -169,7 +188,7 @@ CREATE TABLE IF NOT EXISTS financial_liabilities (
   notes TEXT
 );
 
--- Disable Row Level Security (RLS) for smooth anon access
+-- 8. Disable Row Level Security (RLS) so the app can read/write with anon key
 ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE quotations DISABLE ROW LEVEL SECURITY;
@@ -178,7 +197,7 @@ ALTER TABLE projects DISABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
 ALTER TABLE financial_liabilities DISABLE ROW LEVEL SECURITY;
 
--- Initial Seed Data
+-- 9. Initial Seed Data (Safe Upsert)
 INSERT INTO clients (id, name, company_name, email, phone, address, city, contact_person, designation, total_billed, total_paid, current_due, status)
 VALUES 
 ('cli-whiz', 'Whiz Communication', 'Whiz Communication Ltd.', 'events@whizcomm.com.bd', '+880 1711 987654', 'Finlay Square, 6th Floor, GEC Circle', 'Chattogram', 'Tanvir Hossain', 'Head of Brand Operations', 178200, 80000, 98200, 'active'),
@@ -189,63 +208,92 @@ INSERT INTO suppliers (id, name, company_name, category, phone, email, address, 
 VALUES
 ('sup-chittagong-media', 'Bengal PVC & Flex House', 'Bengal Media Imports Ltd.', 'PVC & Media', '+880 1819 998877', 'bengalmedia.ctg@gmail.com', 'Khatungonj, Chattogram', 195000, 145000, 50000, 30, 'active'),
 ('sup-royal-wood', 'Royal Garjan Timber & Carpentry', 'Royal Wood & Hardware Mart', 'Wood & Timber', '+880 1817 223344', 'royalwood.dewri@gmail.com', 'Dewanhat, Chattogram', 88000, 65000, 23000, 15, 'active')
-ON CONFLICT (id) DO NOTHING;`;
+ON CONFLICT (id) DO NOTHING;
+`;
 
 export const DeploymentHub: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'vercel' | 'cloudflare-pages' | 'netlify' | 'supabase' | 'github' | 'cloudflare'>('vercel');
+  const [activeTab, setActiveTab] = useState<'supabase' | 'github' | 'vercel' | 'netlify'>('supabase');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   // Supabase states
   const initialConfig = SupabaseService.getConfig();
-  const [supabaseUrl, setSupabaseUrl] = useState(initialConfig.url);
+  const [supabaseUrl, setSupabaseUrl] = useState(initialConfig.url || SUPABASE_DEFAULT_URL);
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(initialConfig.anonKey);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showKey, setShowKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<{
+    tested: boolean;
+    success: boolean;
+    message: string;
+  }>({
+    tested: false,
+    success: false,
+    message: '',
+  });
+
+  // Sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const config = SupabaseService.getConfig();
-    setSupabaseUrl(config.url);
-    setSupabaseAnonKey(config.anonKey);
+    // If credentials already exist, run a silent connection test
+    if (initialConfig.anonKey) {
+      SupabaseService.testConnection().then((res) => {
+        setConnectionStatus({
+          tested: true,
+          success: res.success,
+          message: res.message,
+        });
+      });
+    }
   }, []);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedCode(id);
-    setTimeout(() => setCopiedCode(null), 2000);
+    setTimeout(() => setCopiedCode(null), 2500);
   };
 
-  const handleSaveSupabase = () => {
+  const handleSaveCredentials = () => {
     SupabaseService.setCredentials(supabaseUrl, supabaseAnonKey);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2500);
+    const updated = SupabaseService.getConfig();
+    setSupabaseUrl(updated.url);
+    handleTestConnection();
   };
 
   const handleTestConnection = async () => {
     setIsTesting(true);
-    setTestResult(null);
     SupabaseService.setCredentials(supabaseUrl, supabaseAnonKey);
+    const updated = SupabaseService.getConfig();
+    setSupabaseUrl(updated.url);
     const result = await SupabaseService.testConnection();
-    setTestResult(result);
+    setConnectionStatus({
+      tested: true,
+      success: result.success,
+      message: result.message,
+    });
     setIsTesting(false);
   };
 
-  const d1Sql = StorageService.generateCloudflareD1Sql();
-
-  const handleDownloadD1Sql = () => {
-    const blob = new Blob([d1Sql], { type: 'text/sql' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `grand_cms_cloudflare_d1_schema_${new Date().toISOString().split('T')[0]}.sql`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleSyncToSupabase = async () => {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      SupabaseService.setCredentials(supabaseUrl, supabaseAnonKey);
+      const current = loadStorageData();
+      const results = await syncAllLocalToSupabase(current);
+      setSyncMessage(
+        `Successfully synced ${results.quotations || 0} quotations, ${results.invoices || 0} invoices, ${results.clients || 0} clients, ${results.projects || 0} projects to Supabase!`
+      );
+    } catch (err: any) {
+      setSyncMessage(`Sync failed: ${err.message || err}`);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
-  const handleDownloadSupabaseSql = () => {
-    const blob = new Blob([SUPABASE_SQL], { type: 'text/sql' });
+  const handleDownloadSql = () => {
+    const blob = new Blob([SUPABASE_SQL], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -256,628 +304,478 @@ export const DeploymentHub: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadDistZip = () => {
-    const a = document.createElement('a');
-    a.href = '/grand-cms-dist.zip';
-    a.download = 'grand-cms-dist.zip';
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const handleDownloadProjectZip = () => {
-    const a = document.createElement('a');
-    a.href = '/grand-cms-project.zip';
-    a.download = 'grand-cms-project.zip';
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const handleDownloadSql = handleDownloadD1Sql;
-
-  const gitCommands = `# 1. Initialize git repository
-git init
-
-# 2. Add all source files, configurations, and Netlify/Cloudflare assets
-git add .
-
-# 3. Commit with detailed Grand CMS architecture
-git commit -m "feat: complete Grand CMS enterprise ERP for Grand Communication & Marketing"
-
-# 4. Set default branch to main
-git branch -M main
-
-# 5. Link your GitHub repository (replace with your repo URL)
-git remote add origin https://github.com/<your-username>/grand-cms.git
-
-# 6. Push to GitHub
-git push -u origin main`;
-
-  const cloudflareCommands = `# 1. Login to Cloudflare via Wrangler CLI
-npx wrangler login
-
-# 2. Create the Cloudflare D1 SQL Database
-npx wrangler d1 create grand-cms-db
-
-# 3. Paste the generated database_id into wrangler.toml
-
-# 4. Initialize schema and seed data into Cloudflare D1
-npx wrangler d1 execute grand-cms-db --file=./schema.sql
-
-# 5. (Optional) Run locally with D1 binding
-npx wrangler dev`;
-
-  const vercelSteps = `# ==========================================================
-# Method A: Vercel Web Dashboard (1-Click & Recommended)
-# ==========================================================
-1. Open https://vercel.com and Sign In with your GitHub account.
-2. Click the "Add New..." button -> Select "Project".
-3. Under "Import Git Repository", find your repo ("grand-cms") and click "Import".
-4. Vercel automatically detects Vite:
-   - Framework Preset: Vite
-   - Root Directory: ./
-   - Build Command: npm run build
-   - Output Directory: dist
-5. Click "Deploy".
-6. In about 30 seconds, your site will be live with a free *.vercel.app link & SSL!
-
-# ==========================================================
-# Method B: Vercel CLI (Deploy in 1 Command from Terminal)
-# ==========================================================
-npm install -g vercel
-vercel login
-vercel --prod`;
-
-  const cloudflarePagesSteps = `# ==========================================================
-# Option A: Direct Drag & Drop (NO GIT NEEDED! 🚀)
-# ==========================================================
-1. Click the "Download Ready dist.zip" button above.
-2. Extract the grand-cms-dist.zip file to get the "dist" folder.
-3. Open https://dash.cloudflare.com/
-4. Navigate to "Workers & Pages" -> "Create application" -> "Pages" tab.
-5. Click "Upload assets".
-6. Enter Project name: "grand-cms" and click "Create project".
-7. Drag and drop the "dist" folder directly into the browser box.
-8. Click "Deploy site" — Your site is live at https://grand-cms.pages.dev!
-
-# ==========================================================
-# Option B: Connect to GitHub (Continuous Deployment)
-# ==========================================================
-1. In Cloudflare Pages, choose "Connect to Git" -> select your repository.
-2. Framework preset: Select "Vite"
-3. Build command: npm run build
-4. Build output directory: dist
-5. Click "Save and Deploy".`;
-
-  const netlifySteps = `# ==========================================================
-# Fix for "Project has not yet been deployed" on Netlify:
-# ==========================================================
-
-Fix 1: Trigger Deploy Manually in Netlify
-1. Go to your Netlify dashboard (shown in your screenshot).
-2. Click the "Deploys" tab in the top navigation bar.
-3. Click the "Trigger deploy" button on the right -> select "Deploy site".
-4. Netlify will run the build command and publish the site!
-
-Fix 2: Confirm Build Settings in Netlify
-1. Go to "Site configuration" (left sidebar) -> "Build & deploy" -> "Continuous deployment".
-2. Ensure:
-   - Base directory: (leave empty)
-   - Build command: npm run build
-   - Publish directory: dist
-3. Save, then go back to "Deploys" -> "Trigger deploy".
-
-Fix 3: Netlify Drop (100% Guaranteed Drag & Drop - No Build Errors)
-1. Click "Download Ready dist.zip" above and extract it.
-2. Visit https://app.netlify.com/drop
-3. Drag & drop the "dist" folder into the box.
-4. Your site will immediately go live with zero build errors!`;
-
   return (
     <div className="space-y-6">
-      {/* Header in Corporate Deep Black */}
-      <div className="bg-slate-950 border border-slate-900 rounded-3xl p-6 sm:p-8 shadow-md relative overflow-hidden text-white">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30 mb-2.5">
-              <Zap className="w-3.5 h-3.5 text-emerald-400" />
-              Free Cloud Hosting & Live Deployment Hub
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Publish Grand CMS Online (100% Free Forever)
-            </h1>
-            <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-2xl font-normal leading-relaxed">
-              Choose from the top free hosting platforms below. Vercel is the easiest 1-click option, or use Cloudflare Pages & Netlify Drop without even touching Git!
-            </p>
+      {/* Top Banner */}
+      <div className="bg-[#0B192C] rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <Database className="w-6 h-6 text-emerald-400" />
+            <h1 className="text-xl sm:text-2xl font-black text-white">Database & GitHub Cloud Hub</h1>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              Supabase Linked
+            </span>
           </div>
+          <p className="text-slate-400 text-xs sm:text-sm mt-1">
+            Connect GRAND CMS directly to your Supabase PostgreSQL database project (<code className="text-emerald-400 font-mono">{SUPABASE_PROJECT_ID}</code>) & synchronize with GitHub.
+          </p>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <button
-              onClick={handleDownloadDistZip}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/30 flex items-center gap-2 transition-all cursor-pointer"
-            >
-              <Download className="w-4 h-4" />
-              Download Ready dist.zip (Drag & Drop)
-            </button>
-            <button
-              onClick={handleDownloadProjectZip}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-2 transition-all cursor-pointer"
-            >
-              <FolderArchive className="w-4 h-4" />
-              Source Code (.zip)
-            </button>
-          </div>
+        {/* Live Status Indicator */}
+        <div className="flex items-center gap-2 bg-[#07101C] px-4 py-2 rounded-xl border border-slate-700/80">
+          <div
+            className={`w-3 h-3 rounded-full ${
+              connectionStatus.tested && connectionStatus.success
+                ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse'
+                : connectionStatus.tested && !connectionStatus.success
+                ? 'bg-red-500'
+                : 'bg-amber-500'
+            }`}
+          />
+          <span className="text-xs font-bold text-slate-200">
+            {connectionStatus.tested && connectionStatus.success
+              ? 'Database: Connected Live'
+              : connectionStatus.tested && !connectionStatus.success
+              ? 'Database: Connection Required'
+              : 'Database: Local Cache Active'}
+          </span>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2 bg-white border border-slate-200 p-2 rounded-2xl shadow-xs">
-        <button
-          onClick={() => setActiveTab('vercel')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'vercel'
-              ? 'bg-slate-950 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
-          }`}
-        >
-          <Zap className="w-4 h-4 text-emerald-400" />
-          1. Vercel (Recommended ⭐)
-        </button>
-
-        <button
-          onClick={() => setActiveTab('cloudflare-pages')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'cloudflare-pages'
-              ? 'bg-amber-600 text-white shadow-xs'
-              : 'text-amber-800 hover:text-amber-950 hover:bg-amber-50'
-          }`}
-        >
-          <Globe className="w-4 h-4" />
-          2. Cloudflare Pages (Unlimited)
-        </button>
-
-        <button
-          onClick={() => setActiveTab('netlify')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'netlify'
-              ? 'bg-cyan-700 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
-          }`}
-        >
-          <Globe className="w-4 h-4" />
-          3. Netlify (Fix & Drop)
-        </button>
-
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('supabase')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'supabase'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-emerald-700 hover:text-emerald-950 hover:bg-emerald-50'
+              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950/40'
+              : 'bg-[#0B192C] text-slate-400 hover:text-white border border-slate-800'
           }`}
         >
-          <Database className="w-4 h-4" />
-          4. Database (Supabase)
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-1" />
+          <Database className="w-4 h-4 text-emerald-400" />
+          <span>Supabase PostgreSQL</span>
         </button>
 
         <button
           onClick={() => setActiveTab('github')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'github'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
+              ? 'bg-slate-700 text-white shadow-md'
+              : 'bg-[#0B192C] text-slate-400 hover:text-white border border-slate-800'
           }`}
         >
-          <Code2 className="w-4 h-4" />
-          5. GitHub
+          <GithubIcon className="w-4 h-4 text-white" />
+          <span>GitHub Repository</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('cloudflare')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'cloudflare'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
+          onClick={() => setActiveTab('vercel')}
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'vercel'
+              ? 'bg-amber-500 text-slate-950 shadow-md'
+              : 'bg-[#0B192C] text-slate-400 hover:text-white border border-slate-800'
           }`}
         >
-          <Server className="w-4 h-4" />
-          6. Cloudflare D1
+          <Globe className="w-4 h-4" />
+          <span>Vercel Deploy</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('netlify')}
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'netlify'
+              ? 'bg-cyan-600 text-white shadow-md'
+              : 'bg-[#0B192C] text-slate-400 hover:text-white border border-slate-800'
+          }`}
+        >
+          <Globe className="w-4 h-4 text-cyan-400" />
+          <span>Netlify Deploy</span>
         </button>
       </div>
 
-      {/* --- TAB 1: GITHUB --- */}
-      {activeTab === 'github' && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-950 flex items-center gap-2">
-                <Code2 className="w-5 h-5 text-blue-600" />
-                Upload Grand CMS Codebase to GitHub
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Target URL:{' '}
-                <a href="https://github.com/" target="_blank" rel="noreferrer" className="text-blue-600 font-semibold hover:underline">
-                  https://github.com/
-                </a>
-              </p>
-            </div>
-
-            <button
-              onClick={() => handleCopy(gitCommands, 'git')}
-              className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              {copiedCode === 'git' ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedCode === 'git' ? 'Copied' : 'Copy Commands'}
-            </button>
-          </div>
-
-          {/* Download ZIP Card */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
-                <Download className="w-6 h-6" />
-              </div>
+      {/* --- TAB 1: SUPABASE --- */}
+      {activeTab === 'supabase' && (
+        <div className="space-y-6">
+          {/* Connection Settings Card */}
+          <div className="bg-[#0B192C] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
               <div>
-                <h3 className="text-sm font-black text-emerald-950">
-                  Direct Download: grand-cms-project.zip (১-ক্লিকে ডাউনলোড)
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Key className="w-4 h-4 text-emerald-400" />
+                  <span>Supabase API Credentials & Live Link</span>
                 </h3>
-                <p className="text-xs text-emerald-700 mt-0.5 font-medium">
-                  সম্পূর্ণ প্রজেক্টের ক্লিন কোডবেস জিপ রেডি করা আছে। জিপটি ডাউনলোড করে সরাসরি গিটহাবে আপলোড করতে পারেন।
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Project Ref:{' '}
+                  <span className="font-mono font-bold text-amber-400">{SUPABASE_PROJECT_ID}</span>{' '}
+                  &bull; Direct Dashboard:{' '}
+                  <a
+                    href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-emerald-400 font-bold hover:underline inline-flex items-center gap-1"
+                  >
+                    Open Dashboard <ExternalLink className="w-3 h-3" />
+                  </a>
                 </p>
               </div>
-            </div>
-            <a
-              href="/grand-cms-project.zip"
-              download="grand-cms-project.zip"
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-            >
-              <Download className="w-4 h-4" />
-              Download ZIP (113 KB)
-            </a>
-          </div>
 
-          <pre className="p-4 bg-slate-950 rounded-2xl border border-slate-900 text-xs font-mono text-emerald-400 overflow-x-auto leading-relaxed shadow-inner">
-            {gitCommands}
-          </pre>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-              <span className="font-bold text-slate-950 block mb-1">Branch</span>
-              <p className="text-slate-600 font-medium">main (standard production branch)</p>
-            </div>
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-              <span className="font-bold text-slate-950 block mb-1">Included Configs</span>
-              <p className="text-slate-600 font-medium">netlify.toml, wrangler.toml, schema.sql</p>
-            </div>
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-              <span className="font-bold text-slate-950 block mb-1">Mobile Support</span>
-              <p className="text-slate-600 font-medium">PWA & Responsive Viewport enabled</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- TAB 2: SUPABASE POSTGRESQL --- */}
-      {activeTab === 'supabase' && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  <Database className="w-3 h-3 text-emerald-600" />
-                  Primary Database
-                </span>
-                <span className="text-xs text-slate-400 font-mono">PostgreSQL Cloud</span>
-              </div>
-              <h2 className="text-lg font-black text-slate-950 mt-1 flex items-center gap-2">
-                Supabase PostgreSQL Database Connection
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Target Project URL:{' '}
-                <a
-                  href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-emerald-700 font-mono font-semibold hover:underline"
+                <button
+                  onClick={handleDownloadSql}
+                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
                 >
-                  https://dbddplawdicokffewuwz.supabase.co
-                </a>
-              </p>
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download SQL</span>
+                </button>
+                <button
+                  onClick={() => handleCopy(SUPABASE_SQL, 'top-sql')}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+                >
+                  {copiedCode === 'top-sql' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedCode === 'top-sql' ? 'Copied SQL!' : 'Copy Schema'}</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => handleCopy(SUPABASE_SQL, 'supabase-sql')}
-                className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-              >
-                {copiedCode === 'supabase-sql' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedCode === 'supabase-sql' ? 'Copied SQL Script!' : 'Copy SQL Schema'}
-              </button>
-
-              <button
-                onClick={handleDownloadSupabaseSql}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download supabase_schema.sql
-              </button>
-            </div>
-          </div>
-
-          {/* Supabase Connection Setup Card */}
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-              <Key className="w-4 h-4 text-emerald-600" />
-              API Connection & Credentials
-            </h3>
-
+            {/* Inputs */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Supabase Project URL:
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Supabase Project URL
                 </label>
                 <input
                   type="text"
                   value={supabaseUrl}
                   onChange={(e) => setSupabaseUrl(e.target.value)}
                   placeholder="https://dbddplawdicokffewuwz.supabase.co"
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full bg-[#07101C] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                  <span>Supabase anon / public Key:</span>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-300">
+                    Supabase Anon / Publishable Public Key *
+                  </label>
                   <a
                     href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/settings/api"
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] text-emerald-600 font-normal hover:underline flex items-center gap-1"
+                    className="text-[11px] text-emerald-400 font-bold hover:underline inline-flex items-center gap-1"
                   >
-                    Get anon key from Supabase Dashboard <ExternalLink className="w-3 h-3" />
+                    Find Anon Key in Supabase API <ExternalLink className="w-3 h-3" />
                   </a>
-                </label>
-                <input
-                  type="password"
-                  value={supabaseAnonKey}
-                  onChange={(e) => setSupabaseAnonKey(e.target.value)}
-                  placeholder="eyJh..."
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+                </div>
+                <div className="relative">
+                  <input
+                    type={showKey ? 'text' : 'password'}
+                    value={supabaseAnonKey}
+                    onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    className="w-full bg-[#07101C] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-100 pr-16 focus:outline-none focus:border-emerald-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-2 top-2 px-2 py-1 text-[10px] text-slate-400 hover:text-white bg-slate-800 rounded font-semibold cursor-pointer"
+                  >
+                    {showKey ? 'Hide' : 'Show'}
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+            {/* Buttons */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <div className="flex items-center gap-2">
-                <button
-                  onClick={handleSaveSupabase}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
-                >
-                  {isSaved ? 'Saved Locally!' : 'Save Credentials'}
-                </button>
-
                 <button
                   onClick={handleTestConnection}
                   disabled={isTesting}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
-                  {isTesting ? 'Testing Connection...' : 'Test Live Connection'}
+                  <span>{isTesting ? 'Testing Connection...' : 'Test Connection'}</span>
+                </button>
+
+                <button
+                  onClick={handleSaveCredentials}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Save Credentials</span>
                 </button>
               </div>
 
-              {testResult && (
-                <div
-                  className={`text-xs px-3.5 py-2 rounded-xl flex items-center gap-2 font-medium ${
-                    testResult.success
-                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                      : 'bg-rose-50 text-rose-800 border border-rose-200'
-                  }`}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSyncToSupabase}
+                  disabled={isSyncing}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md disabled:opacity-50"
+                  title="Upload all local quotations, invoices, clients, projects into Supabase tables"
                 >
-                  {testResult.success ? (
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  )}
-                  <span>{testResult.message}</span>
-                </div>
-              )}
+                  <CloudUpload className={`w-3.5 h-3.5 ${isSyncing ? 'animate-bounce' : ''}`} />
+                  <span>{isSyncing ? 'Syncing...' : 'Sync Local Data to Supabase'}</span>
+                </button>
+              </div>
             </div>
+
+            {/* Connection Test Result Badge */}
+            {connectionStatus.tested && (
+              <div
+                className={`p-3.5 rounded-xl border flex items-start gap-2.5 text-xs ${
+                  connectionStatus.success
+                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                    : 'bg-red-950/40 border-red-500/40 text-red-300'
+                }`}
+              >
+                {connectionStatus.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <p className="font-bold">{connectionStatus.message}</p>
+                  {!connectionStatus.success && (
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Tip: Open your{' '}
+                      <a
+                        href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/sql"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-amber-400 underline font-bold"
+                      >
+                        Supabase SQL Editor
+                      </a>
+                      , paste the schema below, and click <strong>Run</strong>. Then paste your{' '}
+                      <a
+                        href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/settings/api"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-amber-400 underline font-bold"
+                      >
+                        Anon Key
+                      </a>{' '}
+                      above.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {syncMessage && (
+              <div className="p-3 bg-blue-950/40 border border-blue-500/40 rounded-xl text-blue-300 text-xs font-semibold">
+                {syncMessage}
+              </div>
+            )}
           </div>
 
-          {/* Step-by-Step Instructions */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-              Supabase ডাটাবেজ রেডি করার ৩টি সহজ ধাপ:
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between">
-                <div>
-                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs mb-2">
-                    ১
-                  </span>
-                  <h4 className="font-bold text-slate-950 mb-1">SQL Editor খুলুন</h4>
-                  <p className="text-slate-600 leading-relaxed font-medium">
-                    Supabase ড্যাশবোর্ডে গিয়ে বামের মেনু থেকে <span className="font-bold text-emerald-700">"SQL Editor"</span>-এ ক্লিক করুন এবং <span className="font-bold">"New query"</span> চাপুন।
-                  </p>
-                </div>
-                <a
-                  href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/sql"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 text-emerald-600 font-bold hover:underline inline-flex items-center gap-1"
-                >
-                  Open SQL Editor <ExternalLink className="w-3 h-3" />
-                </a>
+          {/* Step by step guide */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-[#0B192C] border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+              <div>
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black flex items-center justify-center text-xs mb-2">
+                  ১
+                </span>
+                <h4 className="font-bold text-white text-xs mb-1">SQL Editor এ টেবিল তৈরি করুন</h4>
+                <p className="text-slate-400 text-xs leading-relaxed">
+                  Supabase Dashboard &gt; SQL Editor এ যান। নিচের SQL স্ক্রিপ্টটি পেস্ট করে "RUN" চাপুন।
+                </p>
               </div>
+              <a
+                href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/sql"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 text-emerald-400 text-xs font-bold hover:underline inline-flex items-center gap-1"
+              >
+                Open SQL Editor <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
 
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between">
-                <div>
-                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs mb-2">
-                    ২
-                  </span>
-                  <h4 className="font-bold text-slate-950 mb-1">SQL কোড রান করুন</h4>
-                  <p className="text-slate-600 leading-relaxed font-medium">
-                    উপরের <span className="font-bold text-emerald-700">"Copy SQL Schema"</span> বাটনে চাপ দিয়ে পুরো কোডটি কপি করে SQL Editor-এ পেস্ট করুন এবং <span className="font-bold">"Run"</span> করুন।
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleCopy(SUPABASE_SQL, 'supabase-sql-btn')}
-                  className="mt-3 text-emerald-600 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer text-left"
-                >
-                  {copiedCode === 'supabase-sql-btn' ? 'Copied to Clipboard!' : 'Click to Copy SQL'}
-                </button>
+            <div className="bg-[#0B192C] border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+              <div>
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black flex items-center justify-center text-xs mb-2">
+                  ২
+                </span>
+                <h4 className="font-bold text-white text-xs mb-1">Anon Key কপি করুন</h4>
+                <p className="text-slate-400 text-xs leading-relaxed">
+                  Supabase Settings &gt; API থেকে <strong className="text-emerald-400">anon public key</strong> টি কপি করে আনুন।
+                </p>
               </div>
+              <a
+                href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/settings/api"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 text-emerald-400 text-xs font-bold hover:underline inline-flex items-center gap-1"
+              >
+                Get API Key <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
 
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between">
-                <div>
-                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs mb-2">
-                    ৩
-                  </span>
-                  <h4 className="font-bold text-slate-950 mb-1">Anon Key টি এখানে দিন</h4>
-                  <p className="text-slate-600 leading-relaxed font-medium">
-                    Supabase Project Settings &gt; API থেকে <span className="font-bold text-emerald-700">anon public key</span> টি কপি করে উপরের ইনপুটে দিয়ে "Test Connection" চাপুন।
-                  </p>
-                </div>
-                <a
-                  href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/settings/api"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 text-emerald-600 font-bold hover:underline inline-flex items-center gap-1"
-                >
-                  Get API Key <ExternalLink className="w-3 h-3" />
-                </a>
+            <div className="bg-[#0B192C] border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+              <div>
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black flex items-center justify-center text-xs mb-2">
+                  ৩
+                </span>
+                <h4 className="font-bold text-white text-xs mb-1">Test & Sync</h4>
+                <p className="text-slate-400 text-xs leading-relaxed">
+                  Key পেস্ট করে <strong>"Test Connection"</strong> দিন এবং <strong>"Sync Local Data"</strong> চাপলেই লাইভ ডাটাবেজ লিংক সম্পন্ন হবে।
+                </p>
               </div>
+              <button
+                onClick={handleTestConnection}
+                className="mt-3 text-emerald-400 text-xs font-bold hover:underline inline-flex items-center gap-1 text-left cursor-pointer"
+              >
+                Test Connection Now <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
           </div>
 
           {/* SQL Preview Box */}
-          <div className="space-y-2">
+          <div className="bg-[#0B192C] border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Supabase PostgreSQL Schema Preview (supabase_schema.sql):
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Code2 className="w-4 h-4 text-emerald-400" />
+                <span>Supabase PostgreSQL Schema (supabase_schema.sql):</span>
               </span>
               <button
-                onClick={() => handleCopy(SUPABASE_SQL, 'supabase-sql-preview')}
-                className="text-xs text-emerald-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                onClick={() => handleCopy(SUPABASE_SQL, 'preview-sql')}
+                className="text-xs text-emerald-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
               >
-                {copiedCode === 'supabase-sql-preview' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                {copiedCode === 'supabase-sql-preview' ? 'Copied' : 'Copy All SQL'}
+                {copiedCode === 'preview-sql' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                <span>{copiedCode === 'preview-sql' ? 'Copied Full SQL!' : 'Copy All SQL'}</span>
               </button>
             </div>
-            <pre className="p-4 bg-slate-950 rounded-2xl border border-slate-900 text-xs font-mono text-emerald-400 max-h-60 overflow-y-auto leading-relaxed shadow-inner">
+
+            <pre className="p-4 bg-[#07101C] rounded-xl border border-slate-800 text-xs font-mono text-emerald-400/90 max-h-72 overflow-y-auto leading-relaxed shadow-inner">
               {SUPABASE_SQL}
             </pre>
           </div>
         </div>
       )}
 
-      {/* --- TAB 3: CLOUDFLARE D1 --- */}
-      {activeTab === 'cloudflare' && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
+      {/* --- TAB 2: GITHUB REPO --- */}
+      {activeTab === 'github' && (
+        <div className="bg-[#0B192C] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-800">
             <div>
-              <h2 className="text-base font-bold text-slate-950 flex items-center gap-2">
-                <Database className="w-5 h-5 text-blue-600" />
-                Cloudflare D1 Relational SQL Database
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Target URL:{' '}
-                <a href="https://dash.cloudflare.com/" target="_blank" rel="noreferrer" className="text-blue-600 font-semibold hover:underline">
-                  https://cloudflare.com/
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <GithubIcon className="w-5 h-5 text-white" />
+                <span>GitHub Repository Link & Commands</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Repository:{' '}
+                <a
+                  href={GITHUB_REPO_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-amber-400 font-bold hover:underline inline-flex items-center gap-1"
+                >
+                  {GITHUB_REPO_URL} <ExternalLink className="w-3 h-3" />
                 </a>
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleCopy(cloudflareCommands, 'cf-cmd')}
-                className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                {copiedCode === 'cf-cmd' ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedCode === 'cf-cmd' ? 'Copied' : 'Copy Wrangler Steps'}
-              </button>
-
-              <button
-                onClick={handleDownloadSql}
-                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download schema.sql
-              </button>
-            </div>
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 border border-slate-700 cursor-pointer"
+            >
+              <GithubIcon className="w-4 h-4" />
+              <span>Open in GitHub</span>
+            </a>
           </div>
 
-          <pre className="p-4 bg-slate-950 rounded-2xl border border-slate-900 text-xs font-mono text-blue-400 overflow-x-auto leading-relaxed shadow-inner">
-            {cloudflareCommands}
-          </pre>
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+              Git Push & Sync Commands:
+            </h4>
+            <pre className="p-4 bg-[#07101C] rounded-xl border border-slate-800 text-xs font-mono text-amber-300 overflow-x-auto leading-relaxed shadow-inner">
+{`# 1. Clone or pull latest
+git remote add origin https://github.com/ZUFuhad/GRANDCMS_APP_Webbase.git
+git fetch origin
+git branch -M main
 
-          {/* Real-time Dynamic SQL State Inspector */}
-          <div className="space-y-2 pt-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Live Cloudflare D1 SQL Schema & State Export:
-              </span>
-              <button
-                onClick={() => handleCopy(d1Sql, 'd1-sql')}
-                className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                {copiedCode === 'd1-sql' ? <Check className="w-3 h-3 text-blue-600" /> : <Copy className="w-3 h-3" />}
-                {copiedCode === 'd1-sql' ? 'Copied Full SQL' : 'Copy Full SQL'}
-              </button>
-            </div>
-            <pre className="p-4 bg-slate-950 rounded-2xl border border-slate-900 text-xs font-mono text-slate-200 max-h-56 overflow-y-auto shadow-inner">
-              {d1Sql}
+# 2. Stage all modifications (Workflow, Supabase, Quotations, Project Scheduling)
+git add .
+git commit -m "feat: complete approve-to-project & done-to-invoice workflow + supabase linked"
+
+# 3. Push to main branch
+git push -u origin main`}
             </pre>
+
+            <button
+              onClick={() =>
+                handleCopy(
+                  `git remote add origin https://github.com/ZUFuhad/GRANDCMS_APP_Webbase.git\ngit branch -M main\ngit add .\ngit commit -m "feat: complete approve-to-project & done-to-invoice workflow + supabase linked"\ngit push -u origin main`,
+                  'git-cmds'
+                )
+              }
+              className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer border border-slate-700"
+            >
+              {copiedCode === 'git-cmds' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedCode === 'git-cmds' ? 'Commands Copied!' : 'Copy Git Commands'}</span>
+            </button>
           </div>
         </div>
       )}
 
-      {/* --- TAB 3: NETLIFY --- */}
-      {activeTab === 'netlify' && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
+      {/* --- TAB 3: VERCEL DEPLOY --- */}
+      {activeTab === 'vercel' && (
+        <div className="bg-[#0B192C] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div>
-              <h2 className="text-base font-bold text-slate-950 flex items-center gap-2">
-                <Globe className="w-5 h-5 text-blue-600" />
-                Publish & Host on Netlify
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Globe className="w-5 h-5 text-amber-400" />
+                <span>Deploy to Vercel with Supabase</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
                 Target URL:{' '}
-                <a href="https://app.netlify.com/" target="_blank" rel="noreferrer" className="text-blue-600 font-semibold hover:underline">
-                  https://netlify.app/
-                </a>{' '}
-                &bull; Custom Domain:{' '}
-                <span className="font-semibold text-slate-900">https://grandcmsbd.netlify.app/</span>
+                <a href="https://vercel.com/new" target="_blank" rel="noreferrer" className="text-amber-400 font-bold hover:underline">
+                  https://vercel.com/new
+                </a>
               </p>
             </div>
-
-            <button
-              onClick={() => handleCopy(netlifySteps, 'netlify')}
-              className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              {copiedCode === 'netlify' ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedCode === 'netlify' ? 'Copied' : 'Copy Steps'}
-            </button>
           </div>
 
-          <pre className="p-4 bg-slate-950 rounded-2xl border border-slate-900 text-xs font-mono text-cyan-400 overflow-x-auto leading-relaxed shadow-inner">
-            {netlifySteps}
-          </pre>
+          <div className="p-4 bg-[#07101C] rounded-xl border border-slate-800 text-xs text-slate-300 space-y-2">
+            <p className="font-bold text-white">Environment Variables in Vercel:</p>
+            <div className="font-mono bg-slate-950 p-3 rounded-lg border border-slate-800 text-emerald-400 text-xs">
+              VITE_SUPABASE_URL = {supabaseUrl}
+              <br />
+              VITE_SUPABASE_PUBLISHABLE_KEY = {supabaseAnonKey || 'your-supabase-anon-key'}
+            </div>
+            <p className="text-slate-400 text-[11px]">
+              Import repository <code className="text-amber-400 font-mono">ZUFuhad/GRANDCMS_APP_Webbase</code> into Vercel and add the above two environment variables in Settings &gt; Environment Variables.
+            </p>
+          </div>
+        </div>
+      )}
 
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-start gap-3 text-xs text-slate-700">
-            <Sparkles className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+      {/* --- TAB 4: NETLIFY DEPLOY --- */}
+      {activeTab === 'netlify' && (
+        <div className="bg-[#0B192C] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div>
-              <p className="font-bold text-slate-950">Configured File: netlify.toml</p>
-              <p className="text-slate-600 mt-0.5 font-medium">
-                The applet includes a ready-to-deploy <code className="text-blue-700 font-mono bg-blue-50 px-1 py-0.5 rounded border border-blue-200">netlify.toml</code> in the root directory
-                configuring single-page application URL rewriting to <code className="text-blue-700 font-mono bg-blue-50 px-1 py-0.5 rounded border border-blue-200">/index.html</code> (status 200) and Node 20 runtime.
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Globe className="w-5 h-5 text-cyan-400" />
+                <span>Deploy to Netlify</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Target URL:{' '}
+                <a href="https://app.netlify.com/" target="_blank" rel="noreferrer" className="text-cyan-400 font-bold hover:underline">
+                  https://app.netlify.com/
+                </a>
               </p>
+            </div>
+          </div>
+
+          <div className="p-4 bg-[#07101C] rounded-xl border border-slate-800 text-xs text-slate-300 space-y-2">
+            <p className="font-bold text-white">Netlify Environment Variables:</p>
+            <div className="font-mono bg-slate-950 p-3 rounded-lg border border-slate-800 text-cyan-400 text-xs">
+              VITE_SUPABASE_URL = {supabaseUrl}
+              <br />
+              VITE_SUPABASE_PUBLISHABLE_KEY = {supabaseAnonKey || 'your-supabase-anon-key'}
             </div>
           </div>
         </div>
@@ -885,3 +783,5 @@ Fix 3: Netlify Drop (100% Guaranteed Drag & Drop - No Build Errors)
     </div>
   );
 };
+
+export default DeploymentHub;
