@@ -18,7 +18,7 @@ import {
   saveSingleSupplierRemote,
   saveSingleProjectRemote,
 } from './services/storage';
-import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect, ProjectSchedule } from './types';
+import { Quotation, Invoice, Client, Supplier, AppNotification, AIClientProspect, ProjectSchedule, Expense, FinancialLiability } from './types';
 import { DEFAULT_TERMS, GRAND_COMPANY_INFO } from './mock/initialData';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
@@ -449,6 +449,52 @@ export function App() {
     );
   };
 
+  const handleSaveExpense = (exp: Expense) => {
+    const exists = data.expenses.some((item: Expense) => item.id === exp.id);
+    const updated = exists
+      ? data.expenses.map((item: Expense) => (item.id === exp.id ? exp : item))
+      : [exp, ...data.expenses];
+
+    setData({
+      ...data,
+      expenses: updated,
+    });
+    saveExpenses(updated);
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    deleteRemote('expenses', id);
+    const updated = data.expenses.filter((exp: Expense) => exp.id !== id);
+    setData({
+      ...data,
+      expenses: updated,
+    });
+    saveExpenses(updated);
+  };
+
+  const handleSaveLiability = (liab: FinancialLiability) => {
+    const exists = data.liabilities.some((item: FinancialLiability) => item.id === liab.id);
+    const updated = exists
+      ? data.liabilities.map((item: FinancialLiability) => (item.id === liab.id ? liab : item))
+      : [liab, ...data.liabilities];
+
+    setData({
+      ...data,
+      liabilities: updated,
+    });
+    saveLiabilities(updated);
+  };
+
+  const handleDeleteLiability = (id: string) => {
+    deleteRemote('financial_liabilities', id);
+    const updated = data.liabilities.filter((liab: FinancialLiability) => liab.id !== id);
+    setData({
+      ...data,
+      liabilities: updated,
+    });
+    saveLiabilities(updated);
+  };
+
   const handleSaveClient = (c: Client) => {
     const exists = data.clients.some((item: Client) => item.id === c.id);
     const updated = exists
@@ -663,7 +709,16 @@ export function App() {
           )}
 
           {activeTab === 'expenses' && (
-            <ExpensesLiabilities expenses={data.expenses} liabilities={data.liabilities} />
+            <ExpensesLiabilities
+              expenses={data.expenses}
+              liabilities={data.liabilities}
+              suppliers={data.suppliers}
+              projects={data.projects}
+              onSaveExpense={handleSaveExpense}
+              onDeleteExpense={handleDeleteExpense}
+              onSaveLiability={handleSaveLiability}
+              onDeleteLiability={handleDeleteLiability}
+            />
           )}
 
           {activeTab === 'agentic' && (
