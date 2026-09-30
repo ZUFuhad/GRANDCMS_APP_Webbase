@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { Invoice, PaymentRecord, Client } from '../types';
-import { Receipt, Plus, Eye, Trash2, Search, DollarSign, MessageSquare, Printer, Download, X } from 'lucide-react';
-import jsPDF from 'jspdf';
+import { Invoice, PaymentRecord, Client, Quotation } from '../types';
+import { Receipt, Plus, Eye, Trash2, Search, DollarSign, MessageSquare, Printer, Download, X, FileCheck, CheckCircle } from 'lucide-react';
 import { GRAND_COMPANY_INFO } from '../mock/initialData';
+import { CreateInvoiceModal } from './CreateInvoiceModal';
+import { CreateCashReceiptModal } from './CreateCashReceiptModal';
+import { OfficialCashReceiptPrintModal, OfficialReceiptData } from './OfficialCashReceiptPrintModal';
+import { numberToWordsBDT } from '../utils/numberToWords';
 
 interface InvoiceModuleProps {
   invoices: Invoice[];
   clients: Client[];
+  quotations?: Quotation[];
   onSaveInvoice: (invoice: Invoice) => void;
   onDeleteInvoice: (id: string) => void;
   onPreviewInvoice: (invoice: Invoice) => void;
@@ -15,16 +19,21 @@ interface InvoiceModuleProps {
 export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
   invoices,
   clients,
+  quotations = [],
   onSaveInvoice,
   onDeleteInvoice,
   onPreviewInvoice,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  
+  // Modals
+  const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
+  const [isCreateReceiptOpen, setIsCreateReceiptOpen] = useState(false);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
-  const [viewingReceipt, setViewingReceipt] = useState<{ invoice: Invoice; payment: PaymentRecord } | null>(null);
+  const [printedReceiptData, setPrintedReceiptData] = useState<OfficialReceiptData | null>(null);
 
-  // Payment Form State
+  // Quick Payment Modal State
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Cheque' | 'bKash' | 'Nagad' | 'Bank Transfer'>('Bank Transfer');
   const [reference, setReference] = useState('');
@@ -33,9 +42,9 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
 
   const handleOpenPaymentModal = (invoice: Invoice) => {
     setPayingInvoice(invoice);
-    setPaymentAmount(invoice.due);
+    setPaymentAmount(invoice.due > 0 ? invoice.due : invoice.total);
     setReference('');
-    setNotes('');
+    setNotes(`Payment against ${invoice.invoiceNumber}`);
   };
 
   const handleRecordPayment = (e: React.FormEvent) => {
@@ -49,7 +58,7 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
       method: paymentMethod,
       reference,
       receivedBy,
-      notes,
+      notes: notes || `Payment against ${payingInvoice.invoiceNumber}`,
     };
 
     const newAdvance = (payingInvoice.advance || 0) + paymentAmount;
@@ -66,57 +75,171 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
 
     onSaveInvoice(updatedInvoice);
     setPayingInvoice(null);
-    setViewingReceipt({ invoice: updatedInvoice, payment: newPayment });
+
+    // Open Official Money Receipt Print View immediately
+    setPrintedReceiptData({
+      receiptNumber: `GCMS/MR/2026/${String(Math.floor(Math.random() * 899) + 101)}`,
+      date: newPayment.date,
+      clientName: updatedInvoice.clientName,
+      clientCompany: updatedInvoice.clientCompany,
+      amount: paymentAmount,
+      amountInWords: numberToWordsBDT(paymentAmount),
+      paymentMethod,
+      reference,
+      purpose: `Payment for Invoice ${updatedInvoice.invoiceNumber} (${updatedInvoice.subject})`,
+      receivedBy,
+      invoiceNumber: updatedInvoice.invoiceNumber,
+    });
+  };
+
+  // Handler when creating a Cash Receipt from "+ Add Cash Receipt" button
+  const handleSaveCashReceipt = (receiptData: {
+    receiptNumber: string;
+    date: string;
+    clientName: string;
+    clientCompany?: string;
+    amount: number;
+    amountInWords: string;
+    paymentMethod: 'Cash' | 'Bank Transfer' | 'bKash' | 'Cheque' | 'Nagad';
+    reference: string;
+    purpose: string;
+    receivedBy: string;
+    linkedInvoiceId?: string;
+  }) => {
+    if (receiptData.linkedInvoiceId) {
+      const inv = invoices.find((i) => i.id === receiptData.linkedInvoiceId);
+      if (inv) {
+        const newPayment: PaymentRecord = {
+          id: `pay-${Date.now()}`,
+          amount: receiptData.amount,
+          date: receiptData.date,
+          method: receiptData.paymentMethod,
+          reference: receiptData.reference,
+          receivedBy: receiptData.receivedBy,
+          notes: receiptData.purpose,
+        };
+        const newAdvance = (inv.advance || 0) + receiptData.amount;
+        const newDue = Math.max(0, inv.total - newAdvance);
+        const newStatus = newDue === 0 ? 'Paid' : 'Partial';
+
+        const updatedInvoice: Invoice = {
+          ...inv,
+          advance: newAdvance,
+          due: newDue,
+          status: newStatus,
+          payments: [...(inv.payments || []), newPayment],
+        };
+
+        onSaveInvoice(updatedInvoice);
+      }
+    }
+
+    setPrintedReceiptData(receiptData);
+  };
+
+  const handlePrintExistingReceipt = (inv: Invoice) => {
+    const latestPayment = inv.payments && inv.payments.length > 0
+      ? inv.payments[inv.payments.length - 1]
+      : null;
+
+    const amount = latestPayment ? latestPayment.amount : inv.advance || inv.total;
+    const method = latestPayment ? latestPayment.method : 'Bank Transfer';
+    const date = latestPayment ? latestPayment.date : inv.date;
+    const ref = latestPayment ? latestPayment.reference : 'Payment on confirmation';
+
+    setPrintedReceiptData({
+      receiptNumber: `GCMS/MR/2026/${String(Math.floor(Math.random() * 899) + 101)}`,
+      date,
+      clientName: inv.clientName,
+      clientCompany: inv.clientCompany,
+      amount,
+      amountInWords: numberToWordsBDT(amount),
+      paymentMethod: method,
+      reference: ref,
+      purpose: `Payment for Invoice ${inv.invoiceNumber} (${inv.subject})`,
+      receivedBy: GRAND_COMPANY_INFO.defaultSignatory.name,
+      invoiceNumber: inv.invoiceNumber,
+    });
   };
 
   const filteredInvoices = invoices.filter((inv) => {
     const matchesSearch =
       inv.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.subject.toLowerCase().includes(searchTerm.toLowerCase());
+      inv.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (inv.clientCompany && inv.clientCompany.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus =
       filterStatus === 'all' || inv.status.toLowerCase() === filterStatus.toLowerCase();
     return matchesSearch && matchesStatus;
   });
 
-  const totalInvoiced = invoices.reduce((sum, inv) => sum + inv.total, 0);
-  const totalDue = invoices.reduce((sum, inv) => sum + inv.due, 0);
+  const totalInvoiced = invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
+  const totalDue = invoices.reduce((sum, inv) => sum + (Number(inv.due) || 0), 0);
   const totalCollected = totalInvoiced - totalDue;
 
   return (
     <div className="space-y-6">
+      {/* Top Header & Action Buttons */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-white">Invoices & Money Receipts</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-black text-white">Invoices & Money Receipts</h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
+              Official Tax Pad
+            </span>
+          </div>
           <p className="text-slate-400 text-xs sm:text-sm mt-0.5">
-            Track tax invoices, collect payments, and generate official money receipts.
+            Issue extra commercial invoices, collect payments, and generate official stamped money receipts.
           </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setIsCreateReceiptOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-extrabold text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/30 transition-all"
+            title="Issue official Grand Communication cash / money receipt voucher"
+          >
+            <DollarSign className="w-4 h-4" />
+            <span>+ Add Cash Receipt</span>
+          </button>
+
+          <button
+            onClick={() => setIsCreateInvoiceOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20 transition-all"
+            title="Create an extra or manual commercial tax invoice"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Create New Invoice</span>
+          </button>
         </div>
       </div>
 
       {/* Stats Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-4 rounded-2xl bg-[#0B192C] border border-slate-800 shadow-xl">
-          <p className="text-xs font-semibold text-blue-400 uppercase">Total Invoiced</p>
-          <h3 className="text-lg font-black text-white mt-1">৳ {totalInvoiced.toLocaleString()}/-</h3>
+          <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Total Invoiced</p>
+          <h3 className="text-xl font-black text-white mt-1">৳ {totalInvoiced.toLocaleString()}/-</h3>
+          <p className="text-[10px] text-slate-500 mt-0.5">{invoices.length} total tax invoices</p>
         </div>
         <div className="p-4 rounded-2xl bg-[#0B192C] border border-slate-800 shadow-xl">
-          <p className="text-xs font-semibold text-emerald-400 uppercase">Total Collected (Advance)</p>
-          <h3 className="text-lg font-black text-white mt-1">৳ {totalCollected.toLocaleString()}/-</h3>
+          <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Total Collected (Cash/Advance)</p>
+          <h3 className="text-xl font-black text-white mt-1">৳ {totalCollected.toLocaleString()}/-</h3>
+          <p className="text-[10px] text-slate-500 mt-0.5">Verified & received via cash/bank</p>
         </div>
         <div className="p-4 rounded-2xl bg-[#0B192C] border border-slate-800 shadow-xl">
-          <p className="text-xs font-semibold text-amber-400 uppercase">Total Due Balance</p>
-          <h3 className="text-lg font-black text-white mt-1">৳ {totalDue.toLocaleString()}/-</h3>
+          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Total Pending Due Balance</p>
+          <h3 className="text-xl font-black text-white mt-1">৳ {totalDue.toLocaleString()}/-</h3>
+          <p className="text-[10px] text-slate-500 mt-0.5">Collectable agency receivables</p>
         </div>
       </div>
 
-      {/* Search & Filter */}
+      {/* Search & Filter Bar */}
       <div className="bg-[#0B192C] rounded-2xl p-4 shadow-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-200">
         <div className="flex items-center gap-3 w-full sm:w-96 bg-[#07101C] rounded-xl px-3 py-2 border border-slate-700">
           <Search className="w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search invoices..."
+            placeholder="Search by client, invoice no, subject..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="bg-transparent text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none w-full"
@@ -124,7 +247,7 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          {['all', 'Unpaid', 'Partial', 'Paid'].map((st) => (
+          {['all', 'Due', 'Partial', 'Paid'].map((st) => (
             <button
               key={st}
               onClick={() => setFilterStatus(st)}
@@ -140,15 +263,16 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
         </div>
       </div>
 
-      {/* Invoices List */}
+      {/* Invoices List Table */}
       <div className="bg-[#0B192C] rounded-2xl shadow-xl border border-slate-800 overflow-hidden text-slate-200">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead className="bg-[#07101C] text-slate-300 font-bold border-b border-slate-800">
               <tr>
                 <th className="p-3.5">Invoice No</th>
-                <th className="p-3.5">Client</th>
+                <th className="p-3.5">Client & Company</th>
                 <th className="p-3.5">Subject</th>
+                <th className="p-3.5">Date</th>
                 <th className="p-3.5 text-right">Total</th>
                 <th className="p-3.5 text-right">Advance Paid</th>
                 <th className="p-3.5 text-right">Due Balance</th>
@@ -159,46 +283,66 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
             <tbody className="divide-y divide-slate-800/80">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-10 text-center text-slate-400">
-                    <Receipt className="w-10 h-10 text-slate-600 mx-auto mb-2 opacity-50" />
-                    <p className="font-bold text-white text-sm">No invoices found</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Mark a project "Done" in Project Scheduling or click "Convert to Invoice" on an approved quotation.
+                  <td colSpan={9} className="p-12 text-center text-slate-400">
+                    <Receipt className="w-12 h-12 text-slate-600 mx-auto mb-3 opacity-60" />
+                    <p className="font-bold text-white text-base">No invoices found</p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                      Click <strong className="text-amber-400">+ Create New Invoice</strong> above to issue a direct tax invoice, or mark a project "Done" in Project Scheduling.
                     </p>
                   </td>
                 </tr>
               ) : (
                 filteredInvoices.map((inv) => (
                   <tr key={inv.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="p-3.5 font-bold text-white">{inv.invoiceNumber}</td>
-                    <td className="p-3.5 font-semibold text-slate-200">{inv.clientName}</td>
-                    <td className="p-3.5 text-slate-300">{inv.subject}</td>
-                    <td className="p-3.5 text-right font-bold text-slate-100">৳ {inv.total.toLocaleString()}/-</td>
-                    <td className="p-3.5 text-right font-bold text-emerald-400">৳ {inv.advance.toLocaleString()}/-</td>
-                    <td className="p-3.5 text-right font-black text-amber-400">৳ {inv.due.toLocaleString()}/-</td>
+                    <td className="p-3.5 font-bold text-white whitespace-nowrap">
+                      {inv.invoiceNumber}
+                      {inv.quotationId && (
+                        <span className="block text-[10px] text-slate-500 font-normal">
+                          Linked Quotation
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3.5 font-semibold text-slate-200">
+                      <div>{inv.clientName}</div>
+                      {inv.clientCompany && (
+                        <div className="text-[10px] text-slate-400 font-normal">{inv.clientCompany}</div>
+                      )}
+                    </td>
+                    <td className="p-3.5 text-slate-300 max-w-xs truncate">{inv.subject}</td>
+                    <td className="p-3.5 text-slate-400 whitespace-nowrap">{inv.date}</td>
+                    <td className="p-3.5 text-right font-bold text-slate-100">
+                      ৳ {(inv.total || 0).toLocaleString()}/-
+                    </td>
+                    <td className="p-3.5 text-right font-bold text-emerald-400">
+                      ৳ {(inv.advance || 0).toLocaleString()}/-
+                    </td>
+                    <td className="p-3.5 text-right font-black text-amber-400">
+                      ৳ {(inv.due !== undefined ? inv.due : Math.max(0, inv.total - (inv.advance || 0))).toLocaleString()}/-
+                    </td>
                     <td className="p-3.5 text-center">
                       <span
                         className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                          inv.status === 'Paid'
+                          inv.status === 'Paid' || (inv.due !== undefined && inv.due <= 0)
                             ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                            : inv.status === 'Partial'
+                            : inv.status === 'Partial' || (inv.advance && inv.advance > 0)
                             ? 'bg-amber-950 text-amber-300 border-amber-800'
                             : 'bg-red-950 text-red-300 border-red-800'
                         }`}
                       >
-                        {inv.status}
+                        {inv.due !== undefined && inv.due <= 0 ? 'Paid' : inv.status || 'Due'}
                       </span>
                     </td>
                     <td className="p-3.5 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
                         <button
                           onClick={() => onPreviewInvoice(inv)}
                           className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 cursor-pointer font-bold text-[11px] flex items-center gap-1 transition-all"
                           title="View / Print Tax Invoice"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                          <span>View Invoice</span>
+                          <span>View</span>
                         </button>
+
                         <button
                           onClick={() => handleOpenPaymentModal(inv)}
                           className="px-2 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 cursor-pointer font-bold text-[11px] flex items-center gap-1 transition-colors"
@@ -207,6 +351,18 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
                           <DollarSign className="w-3.5 h-3.5" />
                           <span>Collect</span>
                         </button>
+
+                        {(inv.advance > 0 || (inv.payments && inv.payments.length > 0)) && (
+                          <button
+                            onClick={() => handlePrintExistingReceipt(inv)}
+                            className="px-2 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 cursor-pointer font-bold text-[11px] flex items-center gap-1 transition-colors"
+                            title="Print Money Receipt Voucher"
+                          >
+                            <FileCheck className="w-3.5 h-3.5" />
+                            <span>MR Receipt</span>
+                          </button>
+                        )}
+
                         <button
                           onClick={() => onDeleteInvoice(inv.id)}
                           className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900 cursor-pointer transition-colors"
@@ -224,78 +380,119 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
         </div>
       </div>
 
-      {/* Record Payment Modal */}
+      {/* 1. Modal: Create New Standalone / Extra Invoice */}
+      <CreateInvoiceModal
+        isOpen={isCreateInvoiceOpen}
+        onClose={() => setIsCreateInvoiceOpen(false)}
+        onSave={(newInv) => {
+          onSaveInvoice(newInv);
+          // Immediately preview the created invoice
+          onPreviewInvoice(newInv);
+        }}
+        clients={clients}
+        quotations={quotations}
+        invoicesCount={invoices.length}
+      />
+
+      {/* 2. Modal: Add Cash / Money Receipt */}
+      <CreateCashReceiptModal
+        isOpen={isCreateReceiptOpen}
+        onClose={() => setIsCreateReceiptOpen(false)}
+        onSaveReceipt={handleSaveCashReceipt}
+        invoices={invoices}
+        clients={clients}
+      />
+
+      {/* 3. Modal: Quick Payment on Table Row */}
       {payingInvoice && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-black text-base text-[#0B192C]">Record Payment & Generate Money Receipt</h3>
-              <button onClick={() => setPayingInvoice(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#0B192C] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="font-black text-base text-white">Record Payment & Issue Receipt</h3>
+                <p className="text-[11px] text-slate-400">
+                  {payingInvoice.invoiceNumber} • {payingInvoice.clientName}
+                </p>
+              </div>
+              <button
+                onClick={() => setPayingInvoice(null)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleRecordPayment} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Payment Amount (BDT)</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-bold text-slate-300">Payment Amount (BDT ৳) *</label>
+                  <span className="text-[11px] text-amber-400 font-bold">
+                    Pending Due: ৳{payingInvoice.due.toLocaleString()}
+                  </span>
+                </div>
                 <input
                   type="number"
+                  min="1"
+                  max={payingInvoice.due > 0 ? payingInvoice.due : payingInvoice.total}
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold"
+                  className="w-full p-2.5 bg-[#07101C] border border-slate-700 rounded-xl text-sm font-black text-emerald-400 focus:outline-none focus:border-emerald-500"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Payment Method</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Payment Method</label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs"
+                  className="w-full p-2.5 bg-[#07101C] border border-slate-700 rounded-xl text-xs text-slate-200"
                 >
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Cash">Cash</option>
-                  <option value="bKash">bKash</option>
-                  <option value="Nagad">Nagad</option>
-                  <option value="Cheque">Cheque</option>
+                  <option value="Cash">Cash (নগদ)</option>
+                  <option value="Bank Transfer">Bank Transfer (অনলাইন ব্যাংক)</option>
+                  <option value="bKash">bKash (বিকাশ)</option>
+                  <option value="Nagad">Nagad (নগদ)</option>
+                  <option value="Cheque">Bank Cheque (চেক)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Reference / Transaction ID</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Reference / Txn ID / Cheque No
+                </label>
                 <input
                   type="text"
                   value={reference}
                   onChange={(e) => setReference(e.target.value)}
-                  placeholder="e.g. TXN-9821039"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs"
+                  placeholder="e.g. TXN-9821039 or Cheque # 102910"
+                  className="w-full p-2.5 bg-[#07101C] border border-slate-700 rounded-xl text-xs text-slate-200 placeholder-slate-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Received By</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Received By</label>
                 <input
                   type="text"
                   value={receivedBy}
                   onChange={(e) => setReceivedBy(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs"
+                  className="w-full p-2.5 bg-[#07101C] border border-slate-700 rounded-xl text-xs text-slate-200"
+                  required
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-3">
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setPayingInvoice(null)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold cursor-pointer"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs cursor-pointer shadow-md"
+                  className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black rounded-xl text-xs cursor-pointer shadow-md"
                 >
-                  Save & Issue Money Receipt
+                  Save & Issue Official Receipt
                 </button>
               </div>
             </form>
@@ -303,61 +500,13 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
         </div>
       )}
 
-      {/* Money Receipt Modal Preview */}
-      {viewingReceipt && (
-        <div className="fixed inset-0 z-50 bg-[#0B192C]/85 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-8 shadow-2xl space-y-6">
-            <div className="flex justify-between items-center border-b pb-4">
-              <span className="bg-emerald-600 text-white font-bold px-3 py-1 rounded text-xs">
-                OFFICIAL MONEY RECEIPT
-              </span>
-              <button onClick={() => setViewingReceipt(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs text-slate-800">
-              <div className="flex justify-between">
-                <div>
-                  <h3 className="font-black text-base text-[#0B192C]">GRAND Communication & Marketing</h3>
-                  <p className="text-slate-600">{GRAND_COMPANY_INFO.addressLine1}, {GRAND_COMPANY_INFO.addressLine2}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold">Receipt Date: {viewingReceipt.payment.date}</p>
-                  <p className="font-semibold text-slate-600">Ref: {viewingReceipt.payment.reference || 'N/A'}</p>
-                </div>
-              </div>
-
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                <p><strong>Received With Thanks From:</strong> {viewingReceipt.invoice.clientName} ({viewingReceipt.invoice.clientCompany || ''})</p>
-                <p><strong>Against Invoice:</strong> {viewingReceipt.invoice.invoiceNumber} ({viewingReceipt.invoice.subject})</p>
-                <p><strong>Payment Method:</strong> {viewingReceipt.payment.method}</p>
-                <p className="text-sm font-black text-emerald-700 pt-2 border-t">
-                  Amount Received: ৳ {viewingReceipt.payment.amount.toLocaleString()}/-
-                </p>
-              </div>
-
-              <div className="flex justify-between items-end pt-8">
-                <div>
-                  <p className="font-bold text-slate-900">{viewingReceipt.payment.receivedBy}</p>
-                  <p className="text-[11px] text-slate-600">Authorized Signatory</p>
-                </div>
-                <button
-                  onClick={() => {
-                    const text = encodeURIComponent(
-                      `*GRAND Communication & Marketing*\n*MONEY RECEIPT*\n\nClient: ${viewingReceipt.invoice.clientName}\nInvoice: ${viewingReceipt.invoice.invoiceNumber}\nAmount Paid: ৳ ${viewingReceipt.payment.amount.toLocaleString()}/-\nMethod: ${viewingReceipt.payment.method}\n\nThank you for your payment!`
-                    );
-                    window.open(`https://wa.me/?text=${text}`, '_blank');
-                  }}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  Send via WhatsApp
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* 4. Modal: Official Printable Cash / Money Receipt Voucher */}
+      {printedReceiptData && (
+        <OfficialCashReceiptPrintModal
+          receipt={printedReceiptData}
+          isOpen={Boolean(printedReceiptData)}
+          onClose={() => setPrintedReceiptData(null)}
+        />
       )}
     </div>
   );

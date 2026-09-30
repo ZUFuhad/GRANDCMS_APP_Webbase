@@ -634,6 +634,7 @@ export function App() {
             <InvoiceModule
               invoices={data.invoices}
               clients={data.clients}
+              quotations={data.quotations}
               onSaveInvoice={handleSaveInvoice}
               onDeleteInvoice={handleDeleteInvoice}
               onPreviewInvoice={(inv) => setPreviewDoc({ document: inv, type: 'Invoice' })}
