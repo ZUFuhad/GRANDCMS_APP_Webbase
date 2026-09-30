@@ -157,55 +157,68 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
-              {filteredInvoices.map((inv) => (
-                <tr key={inv.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="p-3.5 font-bold text-white">{inv.invoiceNumber}</td>
-                  <td className="p-3.5 font-semibold text-slate-200">{inv.clientName}</td>
-                  <td className="p-3.5 text-slate-300">{inv.subject}</td>
-                  <td className="p-3.5 text-right font-bold text-slate-100">৳ {inv.total.toLocaleString()}/-</td>
-                  <td className="p-3.5 text-right font-bold text-emerald-400">৳ {inv.advance.toLocaleString()}/-</td>
-                  <td className="p-3.5 text-right font-black text-amber-400">৳ {inv.due.toLocaleString()}/-</td>
-                  <td className="p-3.5 text-center">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                        inv.status === 'Paid'
-                          ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                          : inv.status === 'Partial'
-                          ? 'bg-amber-950 text-amber-300 border-amber-800'
-                          : 'bg-red-950 text-red-300 border-red-800'
-                      }`}
-                    >
-                      {inv.status}
-                    </span>
-                  </td>
-                  <td className="p-3.5 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <button
-                        onClick={() => onPreviewInvoice(inv)}
-                        className="p-1.5 rounded-lg bg-[#07101C] hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 cursor-pointer transition-colors"
-                        title="View Invoice"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleOpenPaymentModal(inv)}
-                        className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 cursor-pointer font-bold flex items-center gap-1 transition-colors"
-                        title="Collect Payment / Advance"
-                      >
-                        <DollarSign className="w-3.5 h-3.5" />
-                        Collect
-                      </button>
-                      <button
-                        onClick={() => onDeleteInvoice(inv.id)}
-                        className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900 cursor-pointer transition-colors"
-                        title="Delete Invoice"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+              {filteredInvoices.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-10 text-center text-slate-400">
+                    <Receipt className="w-10 h-10 text-slate-600 mx-auto mb-2 opacity-50" />
+                    <p className="font-bold text-white text-sm">No invoices found</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Mark a project "Done" in Project Scheduling or click "Convert to Invoice" on an approved quotation.
+                    </p>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredInvoices.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="p-3.5 font-bold text-white">{inv.invoiceNumber}</td>
+                    <td className="p-3.5 font-semibold text-slate-200">{inv.clientName}</td>
+                    <td className="p-3.5 text-slate-300">{inv.subject}</td>
+                    <td className="p-3.5 text-right font-bold text-slate-100">৳ {inv.total.toLocaleString()}/-</td>
+                    <td className="p-3.5 text-right font-bold text-emerald-400">৳ {inv.advance.toLocaleString()}/-</td>
+                    <td className="p-3.5 text-right font-black text-amber-400">৳ {inv.due.toLocaleString()}/-</td>
+                    <td className="p-3.5 text-center">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                          inv.status === 'Paid'
+                            ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                            : inv.status === 'Partial'
+                            ? 'bg-amber-950 text-amber-300 border-amber-800'
+                            : 'bg-red-950 text-red-300 border-red-800'
+                        }`}
+                      >
+                        {inv.status}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => onPreviewInvoice(inv)}
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 cursor-pointer font-bold text-[11px] flex items-center gap-1 transition-all"
+                          title="View / Print Tax Invoice"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Invoice</span>
+                        </button>
+                        <button
+                          onClick={() => handleOpenPaymentModal(inv)}
+                          className="px-2 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 cursor-pointer font-bold text-[11px] flex items-center gap-1 transition-colors"
+                          title="Collect Payment / Advance"
+                        >
+                          <DollarSign className="w-3.5 h-3.5" />
+                          <span>Collect</span>
+                        </button>
+                        <button
+                          onClick={() => onDeleteInvoice(inv.id)}
+                          className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900 cursor-pointer transition-colors"
+                          title="Delete Invoice"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -177,6 +177,7 @@ export function App() {
     });
 
     setActiveTab('invoices');
+    setPreviewDoc({ document: newInvoice, type: 'Invoice' });
   };
 
   const handleApproveQuotationAndSchedule = (q: Quotation) => {
@@ -305,6 +306,7 @@ export function App() {
     );
 
     let updatedInvoices = [...data.invoices];
+    let targetInvoice: Invoice;
 
     if (!existingInvoice) {
       const nextInvNum = project.quotationNumber
@@ -374,8 +376,17 @@ export function App() {
         createdAt: new Date().toISOString().split('T')[0],
       };
 
+      targetInvoice = newInvoice;
       updatedInvoices = [newInvoice, ...data.invoices];
       updatedProject.invoiceId = newInvoice.id;
+    } else {
+      targetInvoice = existingInvoice;
+      // Bring existing linked invoice to top of invoice list
+      updatedInvoices = [
+        existingInvoice,
+        ...data.invoices.filter((i: Invoice) => i.id !== existingInvoice.id),
+      ];
+      updatedProject.invoiceId = existingInvoice.id;
     }
 
     // 3. Update projects array
@@ -391,7 +402,7 @@ export function App() {
     const newNotif: AppNotification = {
       id: `notif-${Date.now()}`,
       title: 'Project Done & Invoiced',
-      message: `Project "${project.projectName}" marked Done! Generated Invoice & Receipts.`,
+      message: `Project "${project.projectName}" marked Done! Generated Invoice ${targetInvoice.invoiceNumber}.`,
       timestamp: new Date().toLocaleString(),
       read: false,
       type: 'invoice',
@@ -405,8 +416,11 @@ export function App() {
       notifications: [newNotif, ...data.notifications],
     });
 
-    // Directly navigate to Invoices & Receipts
+    // 1. Directly navigate to Invoices & Receipts
     setActiveTab('invoices');
+
+    // 2. Open invoice preview immediately so user instantly sees the full generated tax invoice
+    setPreviewDoc({ document: targetInvoice, type: 'Invoice' });
   };
 
   const handleSaveClient = (c: Client) => {

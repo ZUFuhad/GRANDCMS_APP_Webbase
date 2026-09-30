@@ -239,7 +239,6 @@ export const toProjectRow = (p: ProjectSchedule, clients: Client[] = []) => {
     title: p.projectName,
     client_id: client?.id || clientIdFor(p.clientName, p.clientCompany),
     client_name: p.clientName,
-    client_company: p.clientCompany || null,
     quotation_id: p.quotationId || null,
     invoice_id: p.invoiceId || null,
     event_date: p.eventDate || '',
@@ -248,29 +247,70 @@ export const toProjectRow = (p: ProjectSchedule, clients: Client[] = []) => {
     status: p.status,
     priority: 'Normal',
     location: p.venue || null,
-    assigned_team_json: p.assignedTeam || [],
-    checklist_json: p.checklist || [],
+    // Safely store team, checklist, company, and financial metadata in JSONB
+    assigned_team_json: {
+      team: p.assignedTeam || ['Operations Team'],
+      checklist: p.checklist || [],
+      client_company: p.clientCompany || '',
+      client_address: p.clientAddress || '',
+      total_amount: p.totalAmount || 0,
+      advance: p.advance || 0,
+      due: p.due || 0,
+      quotation_number: p.quotationNumber || '',
+    },
     progress_percent: p.status === 'Completed' ? 100 : 0,
     created_at: p.createdAt || new Date().toISOString(),
   };
 };
 
-export const fromProjectRow = (r: any): ProjectSchedule => ({
-  id: r.id,
-  quotationId: r.quotation_id || undefined,
-  quotationNumber: '',
-  invoiceId: r.invoice_id || undefined,
-  projectName: r.title,
-  clientName: r.client_name,
-  clientCompany: r.client_company || '',
-  venue: r.location || '',
-  eventDate: r.event_date || '',
-  setupDate: r.installation_deadline || '',
-  status: r.status || 'Upcoming',
-  assignedTeam: Array.isArray(r.assigned_team_json) ? r.assigned_team_json : ['Operations Team'],
-  checklist: Array.isArray(r.checklist_json) ? r.checklist_json : [],
-  createdAt: r.created_at || '',
-});
+export const fromProjectRow = (r: any): ProjectSchedule => {
+  let assignedTeam = ['Operations Team'];
+  let checklist = [];
+  let clientCompany = r.client_company || '';
+  let clientAddress = '';
+  let totalAmount: number | undefined = undefined;
+  let advance: number | undefined = undefined;
+  let due: number | undefined = undefined;
+  let quotationNumber = '';
+
+  if (Array.isArray(r.assigned_team_json)) {
+    assignedTeam = r.assigned_team_json;
+  } else if (r.assigned_team_json && typeof r.assigned_team_json === 'object') {
+    if (Array.isArray(r.assigned_team_json.team)) assignedTeam = r.assigned_team_json.team;
+    if (Array.isArray(r.assigned_team_json.checklist)) checklist = r.assigned_team_json.checklist;
+    if (r.assigned_team_json.client_company) clientCompany = r.assigned_team_json.client_company;
+    if (r.assigned_team_json.client_address) clientAddress = r.assigned_team_json.client_address;
+    if (typeof r.assigned_team_json.total_amount === 'number') totalAmount = r.assigned_team_json.total_amount;
+    if (typeof r.assigned_team_json.advance === 'number') advance = r.assigned_team_json.advance;
+    if (typeof r.assigned_team_json.due === 'number') due = r.assigned_team_json.due;
+    if (r.assigned_team_json.quotation_number) quotationNumber = r.assigned_team_json.quotation_number;
+  }
+
+  if (Array.isArray(r.checklist_json) && r.checklist_json.length > 0) {
+    checklist = r.checklist_json;
+  }
+
+  return {
+    id: r.id,
+    quotationId: r.quotation_id || undefined,
+    quotationNumber: quotationNumber || undefined,
+    invoiceId: r.invoice_id || undefined,
+    projectName: r.title,
+    clientName: r.client_name,
+    clientCompany: clientCompany,
+    clientAddress: clientAddress || r.location || '',
+    venue: r.location || '',
+    eventDate: r.event_date || '',
+    setupDate: r.installation_deadline || '',
+    status: r.status || 'Upcoming',
+    assignedTeam,
+    checklist,
+    totalAmount,
+    advance,
+    due,
+    createdAt: r.created_at || '',
+  };
+};
 
 export const toExpenseRow = (e: Expense) => ({
   id: e.id,
@@ -517,17 +557,18 @@ export const hydrateStorageData = async () => {
 const upsertRemote = async (table: string, rows: any[]) => {
   if (rows.length === 0) return { count: 0 };
   const client = SupabaseService.getClient();
-  if (!client) return { count: 0 };
+  if (!client) return { count: 0, error: 'Supabase client not initialized' };
 
   try {
     const { error } = await client.from(table).upsert(rows, { onConflict: 'id' });
     if (error) {
-      console.warn(`Supabase ${table} sync notice: ${error.message}`);
+      console.error(`Supabase ${table} sync error: ${error.message}`, error);
+      return { count: 0, error: error.message };
     }
     return { count: rows.length };
   } catch (err) {
-    console.warn(`Supabase upsert error on ${table}:`, err);
-    return { count: 0 };
+    console.error(`Supabase upsert exception on ${table}:`, err);
+    return { count: 0, error: String(err) };
   }
 };
 
