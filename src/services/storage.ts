@@ -467,14 +467,19 @@ export const loadStorageData = () => {
     }));
 
     // Sanitize prospects
-    const aiProspects: AIClientProspect[] = rawProspects.map((p: any, idx: number) => ({
-      ...p,
-      mobileNumber: p.mobileNumber || (idx === 0 ? '01711-884920' : idx === 1 ? '01819-335128' : '01914-772391'),
-      contactPerson: p.contactPerson || 'Contact Person',
-      priority: p.priority || 'High',
-      triggerEvent: p.triggerEvent || 'Direct Market Lead',
-      estimatedBudget: Number(p.estimatedBudget) || 50000,
-    }));
+    const aiProspects: AIClientProspect[] = rawProspects.map((p: any) => {
+      const contactVerified = Boolean(p.contactVerified || p.source === 'Manual');
+      return {
+        ...p,
+        contactPerson: contactVerified ? p.contactPerson || '' : '',
+        mobileNumber: contactVerified ? p.mobileNumber || '' : '',
+        email: contactVerified ? p.email || '' : '',
+        contactVerified,
+        priority: p.priority || 'Medium',
+        triggerEvent: contactVerified ? p.triggerEvent || '' : '',
+        estimatedBudget: contactVerified ? Number(p.estimatedBudget) || 0 : 0,
+      };
+    });
 
     return {
       quotations: quotations.length > 0 ? quotations : INITIAL_QUOTATIONS,

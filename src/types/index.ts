@@ -173,33 +173,45 @@ export interface AppNotification {
   message: string;
   timestamp: string;
   read: boolean;
-  type: 'quotation' | 'invoice' | 'liability' | 'project';
+  type: 'quotation' | 'invoice' | 'liability' | 'project' | 'lead';
 }
 
-export interface AIClientProspect {
+export interface VerifiedBusinessContact {
+  contactPerson?: string;
+  mobileNumber?: string;
+  whatsappNumber?: string;
+  email?: string;
+  executiveName?: string;
+  executiveTitle?: string;
+  executiveMobileNumber?: string;
+  executiveWhatsappNumber?: string;
+  executiveEmail?: string;
+  sourceUrls?: string[];
+  contactVerified?: boolean;
+}
+
+export interface AIClientProspect extends VerifiedBusinessContact {
   id: string;
   companyName: string;
   industry: string;
   contactPerson: string;
   mobileNumber: string;
-  email?: string;
   location?: string;
   estimatedBudget: number;
   recommendedService: string;
   triggerEvent?: string;
   priority?: 'High' | 'Medium' | 'Low';
   source?: 'AI Radar' | 'Manual' | 'Market Intelligence';
+  contactVerified?: boolean;
   status: 'New Lead' | 'Contacted' | 'Proposal Sent' | 'Won';
   createdAt?: string;
 }
 
-export interface MonitoredCompany {
+export interface MonitoredCompany extends VerifiedBusinessContact {
   id: string;
   companyName: string;
   industry: string;
   focusArea: string;
-  contactPerson?: string;
-  mobileNumber?: string;
   status: 'Monitoring' | 'Signal Detected' | 'Paused';
   lastChecked: string;
   signalNotes?: string;

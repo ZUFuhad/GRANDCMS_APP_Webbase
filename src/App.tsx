@@ -113,19 +113,42 @@ export function App() {
   };
 
   const handleSaveInvoice = (inv: Invoice) => {
+    const previousInvoice = data.invoices.find((item: Invoice) => item.id === inv.id);
     const exists = data.invoices.some((item: Invoice) => item.id === inv.id);
     const updated = exists
       ? data.invoices.map((item: Invoice) => (item.id === inv.id ? inv : item))
       : [inv, ...data.invoices];
+    const collectedDelta = (Number(inv.advance) || 0) - (Number(previousInvoice?.advance) || 0);
+    const matchingClient = data.clients.find((client: Client) =>
+      (inv.clientCompany && client.companyName.toLowerCase() === inv.clientCompany.toLowerCase()) ||
+      client.name.toLowerCase() === inv.clientName.toLowerCase() ||
+      client.companyName.toLowerCase() === inv.clientName.toLowerCase()
+    );
+    const updatedClient = matchingClient && collectedDelta !== 0
+      ? {
+          ...matchingClient,
+          totalPaid: Math.max(0, (Number(matchingClient.totalPaid) || 0) + collectedDelta),
+          currentDue: Math.max(0, (Number(matchingClient.currentDue) || 0) - collectedDelta),
+        }
+      : null;
+    const updatedClients = updatedClient
+      ? data.clients.map((client: Client) => client.id === updatedClient.id ? updatedClient : client)
+      : data.clients;
 
     setData({
       ...data,
       invoices: updated,
+      clients: updatedClients,
     });
 
     saveSingleInvoiceRemote(inv, data.clients).catch((err) =>
       console.warn('Direct invoice sync error:', err)
     );
+    if (updatedClient) {
+      saveSingleClientRemote(updatedClient).catch((err) =>
+        console.warn('Direct client sync error:', err)
+      );
+    }
   };
 
   const handleDeleteInvoice = (id: string) => {
@@ -544,10 +567,19 @@ export function App() {
     const updated = exists
       ? data.aiProspects.map((item: AIClientProspect) => (item.id === p.id ? p : item))
       : [p, ...data.aiProspects];
+    const leadNotification: AppNotification = {
+      id: `notif-${Date.now()}`,
+      title: 'Verified Lead Added',
+      message: `${p.companyName}: source-backed contact profile added.`,
+      timestamp: new Date().toLocaleString(),
+      read: false,
+      type: 'lead',
+    };
 
     setData({
       ...data,
       aiProspects: updated,
+      notifications: exists ? data.notifications : [leadNotification, ...data.notifications],
     });
   };
 
@@ -565,7 +597,7 @@ export function App() {
       quotationNumber: `GCMS/QT/2026/${nextNum}`,
       date: new Date().toISOString().split('T')[0],
       validityDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
-      clientName: lead.contactPerson,
+      clientName: lead.contactPerson || lead.companyName,
       clientCompany: lead.companyName,
       clientAddress: lead.location || 'Chattogram, Bangladesh',
       clientPhone: lead.mobileNumber,

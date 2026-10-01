@@ -41,15 +41,18 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
   const [notes, setNotes] = useState('');
 
   const handleOpenPaymentModal = (invoice: Invoice) => {
+    const remainingDue = Math.max(0, Number(invoice.due) || 0);
+    if (remainingDue === 0) return;
     setPayingInvoice(invoice);
-    setPaymentAmount(invoice.due > 0 ? invoice.due : invoice.total);
+    setPaymentAmount(remainingDue);
     setReference('');
     setNotes(`Payment against ${invoice.invoiceNumber}`);
   };
 
   const handleRecordPayment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payingInvoice || paymentAmount <= 0) return;
+    const remainingDue = Math.max(0, Number(payingInvoice?.due) || 0);
+    if (!payingInvoice || paymentAmount <= 0 || paymentAmount > remainingDue) return;
 
     const newPayment: PaymentRecord = {
       id: `pay-${Date.now()}`,
@@ -105,36 +108,37 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
     purpose: string;
     receivedBy: string;
     linkedInvoiceId?: string;
-  }) => {
+  }): boolean => {
     if (receiptData.linkedInvoiceId) {
       const inv = invoices.find((i) => i.id === receiptData.linkedInvoiceId);
-      if (inv) {
-        const newPayment: PaymentRecord = {
-          id: `pay-${Date.now()}`,
-          amount: receiptData.amount,
-          date: receiptData.date,
-          method: receiptData.paymentMethod,
-          reference: receiptData.reference,
-          receivedBy: receiptData.receivedBy,
-          notes: receiptData.purpose,
-        };
-        const newAdvance = (inv.advance || 0) + receiptData.amount;
-        const newDue = Math.max(0, inv.total - newAdvance);
-        const newStatus = newDue === 0 ? 'Paid' : 'Partial';
+      const remainingDue = Math.max(0, Number(inv?.due) || 0);
+      if (!inv || remainingDue === 0 || receiptData.amount > remainingDue) return false;
+      const newPayment: PaymentRecord = {
+        id: `pay-${Date.now()}`,
+        amount: receiptData.amount,
+        date: receiptData.date,
+        method: receiptData.paymentMethod,
+        reference: receiptData.reference,
+        receivedBy: receiptData.receivedBy,
+        notes: receiptData.purpose,
+      };
+      const newAdvance = (inv.advance || 0) + receiptData.amount;
+      const newDue = Math.max(0, inv.total - newAdvance);
+      const newStatus = newDue === 0 ? 'Paid' : 'Partial';
 
-        const updatedInvoice: Invoice = {
-          ...inv,
-          advance: newAdvance,
-          due: newDue,
-          status: newStatus,
-          payments: [...(inv.payments || []), newPayment],
-        };
+      const updatedInvoice: Invoice = {
+        ...inv,
+        advance: newAdvance,
+        due: newDue,
+        status: newStatus,
+        payments: [...(inv.payments || []), newPayment],
+      };
 
-        onSaveInvoice(updatedInvoice);
-      }
+      onSaveInvoice(updatedInvoice);
     }
 
     setPrintedReceiptData(receiptData);
+    return true;
   };
 
   const handlePrintExistingReceipt = (inv: Invoice) => {
@@ -345,8 +349,9 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
 
                         <button
                           onClick={() => handleOpenPaymentModal(inv)}
-                          className="px-2 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 cursor-pointer font-bold text-[11px] flex items-center gap-1 transition-colors"
-                          title="Collect Payment / Advance"
+                          disabled={inv.due <= 0}
+                          className="px-2 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed font-bold text-[11px] flex items-center gap-1 transition-colors"
+                          title={inv.due > 0 ? 'Collect payment for outstanding due' : 'Invoice is fully paid'}
                         >
                           <DollarSign className="w-3.5 h-3.5" />
                           <span>Collect</span>
@@ -437,7 +442,7 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
                 <input
                   type="number"
                   min="1"
-                  max={payingInvoice.due > 0 ? payingInvoice.due : payingInvoice.total}
+                  max={payingInvoice.due}
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(Number(e.target.value))}
                   className="w-full p-2.5 bg-[#07101C] border border-slate-700 rounded-xl text-sm font-black text-emerald-400 focus:outline-none focus:border-emerald-500"

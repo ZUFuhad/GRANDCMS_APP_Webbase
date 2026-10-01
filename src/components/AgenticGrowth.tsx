@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AIClientProspect, MonitoredCompany, ProspectChatMessage } from '../types';
+import { AIClientProspect, MonitoredCompany, ProspectChatMessage, VerifiedBusinessContact } from '../types';
 import { INITIAL_MONITORED_COMPANIES } from '../mock/initialData';
 import {
   TrendingUp,
@@ -34,6 +34,41 @@ interface AgenticGrowthProps {
   onConvertToQuotation?: (prospect: AIClientProspect) => void;
 }
 
+const hasVerifiedContacts = (profile: Partial<VerifiedBusinessContact>) => {
+  const isBangladeshiMobile = (value?: string) => {
+    const digits = (value || '').replace(/\D/g, '');
+    return /^(?:880)?1[3-9]\d{8}$/.test(digits) || /^0?1[3-9]\d{8}$/.test(digits);
+  };
+  const requiredFields = [
+    profile.contactPerson,
+    profile.mobileNumber,
+    profile.whatsappNumber,
+    profile.email,
+    profile.executiveName,
+    profile.executiveTitle,
+    profile.executiveMobileNumber,
+    profile.executiveWhatsappNumber,
+    profile.executiveEmail,
+  ];
+  const sourceHosts = (profile.sourceUrls || []).flatMap((source) => {
+    try {
+      const url = new URL(source);
+      return url.protocol === 'https:' ? [url.hostname.toLowerCase()] : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const mobileNumbersValid = [
+    profile.mobileNumber,
+    profile.whatsappNumber,
+    profile.executiveMobileNumber,
+    profile.executiveWhatsappNumber,
+  ].every(isBangladeshiMobile);
+
+  return profile.contactVerified === true && requiredFields.every((field) => Boolean(field?.trim())) && mobileNumbersValid && new Set(sourceHosts).size >= 2;
+};
+
 export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
   prospects,
   onSaveProspect,
@@ -50,7 +85,11 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
     const saved = localStorage.getItem('grand_monitored_companies');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const storedCompanies = JSON.parse(saved);
+        const sampleIds = new Set(['mc-1', 'mc-2', 'mc-3']);
+        return Array.isArray(storedCompanies)
+          ? storedCompanies.filter((company) => !sampleIds.has(company.id) && company.status !== 'Signal Detected' && hasVerifiedContacts(company))
+          : INITIAL_MONITORED_COMPANIES;
       } catch (_) {}
     }
     return INITIAL_MONITORED_COMPANIES;
@@ -65,14 +104,17 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
     const saved = localStorage.getItem('grand_prospect_chat');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const storedMessages = JSON.parse(saved);
+        return Array.isArray(storedMessages)
+          ? storedMessages.filter((message) => !(message.sender === 'ai' && message.suggestedLead))
+          : [];
       } catch (_) {}
     }
     return [
       {
         id: 'msg-1',
         sender: 'ai',
-        text: 'আসসালামু আলাইকুম! আমি Grand CMS এআই লিড ও কোম্পানি মনিটরিং অ্যাসিস্ট্যান্ট।\n\nআপনি আমাকে যেকোনো কোম্পানি সম্পর্কে বলতে পারেন (যেমন: "BSRM কোম্পানিকে মনিটর করো, তাদের চট্টগ্রামে নতুন শো-রুম বা আউটডোর বিলবোর্ডের কাজ আসলে আমাকে লিড দিবে")। আমি সাথে সাথে কোম্পানিটিকে রাডারে যুক্ত করে নিয়মিত মনিটর করবো এবং কাজের সুযোগ আসলে কন্টাক্ট পারসনের নাম ও মোবাইল নাম্বার সহ হট লিড তৈরি করে দিবো!',
+        text: 'এই Radar শুধু আপনার watchlist-এ দেওয়া তথ্য ব্যবহার করে। Live web search বা market data সংযুক্ত নেই, তাই contact বা নতুন কাজের signal যাচাই ছাড়া তৈরি হবে না।',
         timestamp: 'Just now',
       },
     ];
@@ -96,7 +138,15 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
     industry: '',
     contactPerson: '',
     mobileNumber: '',
+    whatsappNumber: '',
     email: '',
+    executiveName: '',
+    executiveTitle: '',
+    executiveMobileNumber: '',
+    executiveWhatsappNumber: '',
+    executiveEmail: '',
+    sourceUrls: [],
+    contactVerified: false,
     location: 'Chattogram',
     estimatedBudget: 100000,
     recommendedService: '',
@@ -113,6 +163,15 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
     focusArea: '',
     contactPerson: '',
     mobileNumber: '',
+    whatsappNumber: '',
+    email: '',
+    executiveName: '',
+    executiveTitle: '',
+    executiveMobileNumber: '',
+    executiveWhatsappNumber: '',
+    executiveEmail: '',
+    sourceUrls: [],
+    contactVerified: false,
   });
 
   const [scanNotice, setScanNotice] = useState<string | null>(null);
@@ -136,7 +195,15 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
         industry: '',
         contactPerson: '',
         mobileNumber: '',
+        whatsappNumber: '',
         email: '',
+        executiveName: '',
+        executiveTitle: '',
+        executiveMobileNumber: '',
+        executiveWhatsappNumber: '',
+        executiveEmail: '',
+        sourceUrls: [],
+        contactVerified: false,
         location: 'Chattogram',
         estimatedBudget: 100000,
         recommendedService: 'Outdoor Billboard & Event Branding',
@@ -150,8 +217,8 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
 
   const handleSaveLeadSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.companyName || !formData.contactPerson || !formData.mobileNumber) {
-      alert('কোম্পানির নাম, কন্টাক্ট পারসনের নাম ও মোবাইল নাম্বার প্রদান করা আবশ্যক!');
+    if (!formData.companyName || !formData.triggerEvent?.trim() || !hasVerifiedContacts(formData)) {
+      alert('Lead save করতে company, opportunity details, all contact fields, two HTTPS sources, and verification confirmation are required.');
       return;
     }
 
@@ -161,13 +228,21 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
       industry: formData.industry || 'Corporate & Commercial',
       contactPerson: formData.contactPerson,
       mobileNumber: formData.mobileNumber,
+      whatsappNumber: formData.whatsappNumber,
       email: formData.email || '',
+      executiveName: formData.executiveName,
+      executiveTitle: formData.executiveTitle,
+      executiveMobileNumber: formData.executiveMobileNumber,
+      executiveWhatsappNumber: formData.executiveWhatsappNumber,
+      executiveEmail: formData.executiveEmail,
+      sourceUrls: formData.sourceUrls,
       location: formData.location || 'Chattogram',
-      estimatedBudget: Number(formData.estimatedBudget) || 50000,
-      recommendedService: formData.recommendedService || 'Brand Promotion & Display Setup',
-      triggerEvent: formData.triggerEvent || 'Direct Market Outreach',
+      estimatedBudget: Math.max(0, Number(formData.estimatedBudget) || 0),
+      recommendedService: formData.recommendedService || '',
+      triggerEvent: formData.triggerEvent,
       priority: (formData.priority as any) || 'High',
       source: editingLead?.source || 'Manual',
+      contactVerified: true,
       status: (formData.status as any) || 'New Lead',
       createdAt: editingLead?.createdAt || new Date().toISOString().split('T')[0],
     };
@@ -181,8 +256,8 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
   // Add Monitored Company
   const handleSaveMonitorSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!monitorForm.companyName || !monitorForm.focusArea) {
-      alert('কোম্পানির নাম ও কি বিষয়ে মনিটর করতে চান তা লিখুন!');
+    if (!monitorForm.companyName || !monitorForm.focusArea || !hasVerifiedContacts(monitorForm)) {
+      alert('Company profile needs all contact fields, two HTTPS source links, and verification confirmation.');
       return;
     }
 
@@ -191,20 +266,20 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
       companyName: monitorForm.companyName,
       industry: monitorForm.industry || 'General Industry',
       focusArea: monitorForm.focusArea,
-      contactPerson: monitorForm.contactPerson || 'Brand / Procurement Manager',
-      mobileNumber: monitorForm.mobileNumber || '01819-000000',
-      status: 'Monitoring',
-      lastChecked: 'Just added',
-      signalNotes: 'Actively monitoring marketing budgets, events, and tender opportunities.',
+      ...monitorForm,
+      contactVerified: true,
+      status: 'Paused',
+      lastChecked: 'Background monitoring not configured',
+      signalNotes: '',
     };
 
-    setMonitoredCompanies([newCompany, ...monitoredCompanies]);
+    setMonitoredCompanies((previous) => [newCompany, ...previous.filter((company) => company.companyName.toLowerCase() !== newCompany.companyName.toLowerCase())]);
     setIsMonitorModalOpen(false);
-    setScanNotice(`"${newCompany.companyName}" কে সফলভাবে মনিটরিং তালিকায় যুক্ত করা হয়েছে!`);
+    setScanNotice(`"${newCompany.companyName}" verified profile saved. Live monitoring is not configured.`);
     setTimeout(() => setScanNotice(null), 3000);
   };
 
-  // Intelligent Chat Processor
+  // Chat never invents contacts or market events when no search provider is configured.
   const handleSendMessage = (textToSend?: string) => {
     const query = textToSend || inputMessage;
     if (!query.trim()) return;
@@ -217,164 +292,46 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
     };
 
     setChatMessages((prev) => [...prev, userMsg]);
-    setInputMessage('');
-    setIsTyping(true);
-
-    // AI Analysis Simulation
     setTimeout(() => {
-      const lower = query.toLowerCase();
-
-      // Extract Company Name logic
-      let detectedCompany = '';
-      let detectedIndustry = 'Corporate & Industrial';
-      let detectedFocus = 'Showroom branding, events, and billboard expansion';
-      let suggestedPerson = 'Tanvir Rahman (Brand & Marketing Lead)';
-      let suggestedMobile = '01819-554210';
-      let suggestedBudget = 250000;
-      let suggestedService = 'Showroom 3D Neon Signboard & Event Stage Setup';
-
-      if (lower.includes('bsrm') || lower.includes('স্টিল')) {
-        detectedCompany = 'BSRM Steels Ltd.';
-        detectedIndustry = 'Steel & Heavy Manufacturing';
-        detectedFocus = 'New factory inauguration, regional dealer meet, highway billboards';
-        suggestedPerson = 'Engr. Sharif Ahmed (DGM Brand)';
-        suggestedMobile = '01819-335128';
-        suggestedBudget = 350000;
-        suggestedService = 'Dealer Meet Stage Fabrication & Highway Billboards';
-      } else if (lower.includes('walton') || lower.includes('ওয়ালটন')) {
-        detectedCompany = 'Walton Hi-Tech Regional Hub';
-        detectedIndustry = 'Electronics & Home Appliances';
-        detectedFocus = 'Showroom renovation, POSM stands, festive outdoor campaign';
-        suggestedPerson = 'Tanvir Hossain (Regional Incharge)';
-        suggestedMobile = '01914-772391';
-        suggestedBudget = 220000;
-        suggestedService = 'Acrylic 3D Neon Signboard & Promotional Display Booth';
-      } else if (lower.includes('aarong') || lower.includes('আড়ং')) {
-        detectedCompany = 'Aarong Chattogram';
-        detectedIndustry = 'Lifestyle & Fashion Retail';
-        detectedFocus = 'Seasonal collection window display, mall kiosks, festive branding';
-        suggestedPerson = 'Nasrin Sultana (Marketing Exec)';
-        suggestedMobile = '01712-449102';
-        suggestedBudget = 180000;
-        suggestedService = 'Seasonal Window Display & Acrylic Exhibition Kiosk';
-      } else if (lower.includes('unilever') || lower.includes('ইউনিলিভার')) {
-        detectedCompany = 'Unilever Bangladesh Supply Hub';
-        detectedIndustry = 'FMCG & Consumer Goods';
-        detectedFocus = 'Trade marketing, retailer branding, experiential activation';
-        suggestedPerson = 'Fahim Morshed (Trade Marketing Manager)';
-        suggestedMobile = '01713-908124';
-        suggestedBudget = 400000;
-        suggestedService = 'Retailer POSM Unit & Regional Activation Setup';
-      } else if (lower.includes('pran') || lower.includes('প্রাণ')) {
-        detectedCompany = 'PRAN-RFL Group Regional Depot';
-        detectedIndustry = 'Food & Beverage / Plastics';
-        detectedFocus = 'Dealer points outdoor signboards, event sponsorship banners';
-        suggestedPerson = 'Mizanur Rahman (Territory Manager)';
-        suggestedMobile = '01811-447890';
-        suggestedBudget = 280000;
-        suggestedService = 'Outdoor Glow Signboards & Event Branding Setup';
-      } else if (lower.includes('akij') || lower.includes('আকিজ')) {
-        detectedCompany = 'Akij Ceramics Regional Depot';
-        detectedIndustry = 'Ceramics & Building Materials';
-        detectedFocus = 'Dealer conference booth setup & outdoor billboards';
-        suggestedPerson = 'Moniruzzaman (Regional Sales Head)';
-        suggestedMobile = '01711-884920';
-        suggestedBudget = 190000;
-        suggestedService = 'Conference Stage Fabrication & Outdoor Billboards';
-      } else {
-        // Try extracting words
-        const cleaned = query
-          .replace(/(মনিটর করো|monitor|করো|কে|এর|company|কোম্পানি|লিড|দাও|চাই|রাখো)/gi, '')
-          .trim();
-        detectedCompany = cleaned.length > 2 ? cleaned.split(/[\s,]+/)[0] + ' Corporate' : 'Target Corporate Client';
-        detectedFocus = query;
-      }
-
-      // Check if user is asking for list
-      if (lower.includes('কোন কোন') || lower.includes('লিস্ট') || lower.includes('list') || lower.includes('কারা আছে')) {
-        const listText = monitoredCompanies.map((c, i) => `${i + 1}. **${c.companyName}** (${c.status}) - ${c.focusArea}`).join('\n');
-        const reply: ProspectChatMessage = {
-          id: `msg-${Date.now()}`,
-          sender: 'ai',
-          text: `বর্তমানে আপনি নিম্নলিখিত কোম্পানিগুলোকে মনিটরিং তালিকায় রেখেছেন:\n\n${listText}\n\nনতুন কোনো কোম্পানি মনিটর করতে চাইলে কোম্পানির নাম লিখে জানান!`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        setChatMessages((prev) => [...prev, reply]);
-        setIsTyping(false);
-        return;
-      }
-
-      // If monitoring a company, add to MonitoredCompanies list
-      const alreadyMonitored = monitoredCompanies.find((c) =>
-        c.companyName.toLowerCase().includes(detectedCompany.toLowerCase())
-      );
-
-      let newMonitored: MonitoredCompany;
-      if (!alreadyMonitored) {
-        newMonitored = {
-          id: `mc-${Date.now()}`,
-          companyName: detectedCompany,
-          industry: detectedIndustry,
-          focusArea: detectedFocus,
-          contactPerson: suggestedPerson,
-          mobileNumber: suggestedMobile,
-          status: 'Signal Detected',
-          lastChecked: 'Just now',
-          signalNotes: `User instructed surveillance: ${query}`,
-        };
-        setMonitoredCompanies((prev) => [newMonitored, ...prev]);
-      } else {
-        newMonitored = alreadyMonitored;
-      }
-
-      // Prepare Lead Proposal
-      const generatedLead: AIClientProspect = {
-        id: `p-${Date.now()}`,
-        companyName: detectedCompany,
-        industry: detectedIndustry,
-        contactPerson: suggestedPerson,
-        mobileNumber: suggestedMobile,
-        email: `contact@${detectedCompany.toLowerCase().replace(/[^a-z]/g, '')}.com`,
-        location: 'Chattogram, Bangladesh',
-        estimatedBudget: suggestedBudget,
-        recommendedService: suggestedService,
-        triggerEvent: `নতুন প্রজেক্ট সিগন্যাল: ${detectedFocus}`,
-        priority: 'High',
-        source: 'AI Radar',
-        status: 'New Lead',
-        createdAt: new Date().toISOString().split('T')[0],
-      };
-
-      const aiReply: ProspectChatMessage = {
+      const isListRequest = /list|watchlist|লিস্ট|কোম্পানি.*কোন/.test(query.toLowerCase());
+      const listText = monitoredCompanies.map((company, index) => `${index + 1}. ${company.companyName} (${company.status})`).join('\n');
+      const reply: ProspectChatMessage = {
         id: `msg-${Date.now()}`,
         sender: 'ai',
-        text: `✅ **${detectedCompany}** কোম্পানিকে সফলভাবে আপনার **AI Radar & Watchlist**-এ যুক্ত ও স্ক্যান করা হয়েছে!\n\nআমরা তাদের সাম্প্রতিক বিজ্ঞাপন ও ব্র্যান্ডিং সিগন্যাল ডিটেক্ট করেছি। সরাসরি যোগাযোগ করার জন্য কন্টাক্ট পারসন ও মোবাইল নাম্বার সহ একটি নতুন লিড প্রস্তুত করা হয়েছে:`,
+        text: isListRequest
+          ? monitoredCompanies.length ? `Verified company profiles:\n\n${listText}` : 'No verified company profiles have been added yet.'
+          : 'Live search and scheduled monitoring are not configured. I will not invent a contact, opportunity, or notification. Add a source-backed company profile, then connect a server-side search provider to enable monitoring.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        suggestedLead: generatedLead,
-        monitoredCompany: newMonitored,
       };
-
-      setChatMessages((prev) => [...prev, aiReply]);
+      setChatMessages((previous) => [...previous, reply]);
       setIsTyping(false);
     }, 900);
   };
 
   // Add suggested lead to pipeline
   const handleAddSuggestedLead = (lead: Partial<AIClientProspect>) => {
-    if (!lead || !lead.companyName || !lead.contactPerson || !lead.mobileNumber) return;
+    if (!lead || !lead.companyName || !hasVerifiedContacts(lead) || !lead.triggerEvent?.trim()) return;
 
     const fullLead: AIClientProspect = {
       id: lead.id || `p-${Date.now()}`,
       companyName: lead.companyName,
       industry: lead.industry || 'Corporate',
-      contactPerson: lead.contactPerson,
-      mobileNumber: lead.mobileNumber,
+      contactPerson: lead.contactPerson || '',
+      mobileNumber: lead.mobileNumber || '',
+      whatsappNumber: lead.whatsappNumber || '',
       email: lead.email || '',
-      location: lead.location || 'Chattogram',
-      estimatedBudget: lead.estimatedBudget || 100000,
-      recommendedService: lead.recommendedService || 'Brand Setup & Display',
-      triggerEvent: lead.triggerEvent || 'Identified via AI Radar',
-      priority: lead.priority || 'High',
+      executiveName: lead.executiveName || '',
+      executiveTitle: lead.executiveTitle || '',
+      executiveMobileNumber: lead.executiveMobileNumber || '',
+      executiveWhatsappNumber: lead.executiveWhatsappNumber || '',
+      executiveEmail: lead.executiveEmail || '',
+      sourceUrls: lead.sourceUrls || [],
+      contactVerified: true,
+      location: lead.location || '',
+      estimatedBudget: Number(lead.estimatedBudget) || 0,
+      recommendedService: lead.recommendedService || '',
+      triggerEvent: lead.triggerEvent || '',
+      priority: lead.priority || 'Medium',
       source: 'AI Radar',
       status: 'New Lead',
       createdAt: new Date().toISOString().split('T')[0],
@@ -382,71 +339,18 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
 
     if (onSaveProspect) {
       onSaveProspect(fullLead);
-      setScanNotice(`"${fullLead.companyName}" লিড পাইপলাইনে সফলভাবে যুক্ত হয়েছে!`);
+      setScanNotice(`"${fullLead.companyName}" candidate যোগ হয়েছে। Outreach-এর আগে তথ্য যাচাই করুন।`);
       setTimeout(() => setScanNotice(null), 3500);
     }
   };
 
-  // Trigger full market scan
+  // Do not represent profile records as fresh leads without an external signal source.
   const handleRunFullMarketScan = () => {
-    setScanNotice('AI বাজার ও মনিটর করা কোম্পানিগুলোর সাম্প্রতিক ব্র্যান্ডিং কাজের সিগন্যাল স্ক্যান করছে...');
-    setTimeout(() => {
-      // Find a company not in prospects or generate fresh lead
-      const freshLeads: AIClientProspect[] = [
-        {
-          id: `p-${Date.now()}-1`,
-          companyName: 'BSRM Steels Ltd. (Agrabad)',
-          industry: 'Manufacturing & Steel',
-          contactPerson: 'Sharif Ahmed (Brand Lead)',
-          mobileNumber: '01819-335128',
-          email: 'sharif.ahmed@bsrm.com',
-          location: 'Agrabad C/A, Chattogram',
-          estimatedBudget: 350000,
-          recommendedService: 'New Regional Center Neon Fascia & Billboard',
-          triggerEvent: 'Expanding 2 new distribution hubs in Chattogram division',
-          priority: 'High',
-          source: 'AI Radar',
-          status: 'New Lead',
-          createdAt: new Date().toISOString().split('T')[0],
-        },
-        {
-          id: `p-${Date.now()}-2`,
-          companyName: 'Aarong Lifestyle Chattogram',
-          industry: 'Fashion & Retail',
-          contactPerson: 'Nasrin Sultana (Marketing Exec)',
-          mobileNumber: '01712-449102',
-          email: 'nasrin.ctg@aarong.com',
-          location: 'Sholoshohor, Chattogram',
-          estimatedBudget: 175000,
-          recommendedService: 'Autumn Festive Display & Mall Kiosk Setup',
-          triggerEvent: 'Autumn season campaign window fabrication roll-out',
-          priority: 'Medium',
-          source: 'AI Radar',
-          status: 'New Lead',
-          createdAt: new Date().toISOString().split('T')[0],
-        },
-      ];
-
-      if (onSaveProspect) {
-        freshLeads.forEach((l) => onSaveProspect(l));
-      }
-      setScanNotice('✅ স্ক্যান সম্পন্ন! মনিটর করা কোম্পানিগুলো থেকে ২টি নতুন লিড পাইপলাইনে যোগ করা হয়েছে!');
-      setTimeout(() => setScanNotice(null), 4000);
-    }, 1500);
+    setScanNotice('Live monitoring is paused: connect a server-side search provider and scheduler first.');
+    setTimeout(() => setScanNotice(null), 4000);
   };
 
-  // Filtered Prospects with null-safety
-  const safeProspects = (prospects || []).map((p, idx) => ({
-    ...p,
-    companyName: p.companyName || 'Corporate Client',
-    contactPerson: p.contactPerson || 'Contact Person',
-    mobileNumber: p.mobileNumber || (idx === 0 ? '01711-884920' : idx === 1 ? '01819-335128' : '01914-772391'),
-    industry: p.industry || 'Commercial',
-    recommendedService: p.recommendedService || 'Brand Marketing Setup',
-    estimatedBudget: p.estimatedBudget || 100000,
-    priority: p.priority || 'High',
-    status: p.status || 'New Lead',
-  }));
+  const safeProspects = (prospects || []).filter((prospect) => hasVerifiedContacts(prospect) && prospect.companyName.trim() && prospect.triggerEvent?.trim());
 
   const filteredProspects = safeProspects.filter((p) => {
     const q = (searchQuery || '').toLowerCase();
@@ -486,7 +390,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
             className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-4 py-2.5 rounded-xl shadow-lg transition text-xs sm:text-sm cursor-pointer"
           >
             <Zap className="w-4 h-4 fill-slate-950" />
-            <span>AI Radar Scan Now</span>
+                <span>Check Monitoring Setup</span>
           </button>
 
           <button
@@ -518,7 +422,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
           }`}
         >
           <Building2 className="w-4 h-4" />
-          <span>All Leads Pipeline ({prospects.length})</span>
+                <span>Verified Leads Pipeline ({safeProspects.length})</span>
         </button>
 
         <button
@@ -621,6 +525,11 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                           {lead.priority} Priority
                         </span>
                       )}
+                      {lead.source !== 'Manual' && !lead.contactVerified && (
+                        <span className="ml-1.5 text-[10px] font-semibold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                          Unverified candidate
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1">
@@ -661,29 +570,25 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-1 border-t border-slate-800/60">
-                    <div className="flex items-center gap-1.5 text-xs text-amber-300 font-mono font-bold">
-                      <Phone className="w-3.5 h-3.5 text-amber-400" />
-                      <span>{lead.mobileNumber}</span>
+                  <div className="border-t border-slate-800/60 pt-2 space-y-1.5 text-[11px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-amber-300 font-mono">Mobile: {lead.mobileNumber}</span>
+                      <a href={`tel:${lead.mobileNumber}`} className="text-emerald-400 font-bold">Call</a>
                     </div>
-
-                    <div className="flex items-center gap-1">
-                      <a
-                        href={`tel:${lead.mobileNumber || ''}`}
-                        className="px-2 py-1 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 rounded-md text-[10px] font-bold flex items-center gap-1 transition"
-                        title="Direct Phone Call"
-                      >
-                        <Phone className="w-2.5 h-2.5" /> Call
-                      </a>
-                      <a
-                        href={`https://wa.me/88${(lead.mobileNumber || '').replace(/[^0-9]/g, '')}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 rounded-md text-[10px] font-bold flex items-center gap-1 transition"
-                        title="Chat on WhatsApp"
-                      >
-                        <MessageCircle className="w-2.5 h-2.5" /> WA
-                      </a>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-emerald-300 font-mono">WhatsApp: {lead.whatsappNumber}</span>
+                      <a href={`https://wa.me/${lead.whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="text-emerald-400 font-bold">Message</a>
+                    </div>
+                    <a href={`mailto:${lead.email}`} className="block text-slate-300 break-all">{lead.email}</a>
+                  </div>
+                  <div className="border-t border-slate-800/60 pt-2 text-[10px] text-slate-400 space-y-1">
+                    <p>{lead.executiveTitle}: {lead.executiveName}</p>
+                    <p>Mobile: {lead.executiveMobileNumber} · WhatsApp: {lead.executiveWhatsappNumber}</p>
+                    <a href={`mailto:${lead.executiveEmail}`} className="block break-all">{lead.executiveEmail}</a>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {lead.sourceUrls?.map((source) => (
+                        <a key={source} href={source} target="_blank" rel="noreferrer" className="text-amber-300 underline">Verified source</a>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -692,12 +597,14 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                 <div className="space-y-1.5 text-xs text-slate-300">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-400">Est. Budget:</span>
-                    <span className="font-black text-amber-400 text-sm">৳ {lead.estimatedBudget.toLocaleString()}/-</span>
+                    <span className="font-black text-amber-400 text-sm">
+                      {lead.estimatedBudget > 0 ? `৳ ${lead.estimatedBudget.toLocaleString()}/-` : 'Not provided'}
+                    </span>
                   </div>
 
                   <div>
                     <span className="text-[11px] text-slate-400 block font-medium">Recommended Service:</span>
-                    <span className="text-xs text-slate-200 font-semibold">{lead.recommendedService}</span>
+                    <span className="text-xs text-slate-200 font-semibold">{lead.recommendedService || 'Not entered'}</span>
                   </div>
 
                   {lead.triggerEvent && (
@@ -758,7 +665,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                     Grand AI Company Radar & Lead Assistant
                   </h3>
                   <p className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Live Market Surveillance Active
+                    <span className="w-2 h-2 rounded-full bg-amber-400"></span> Watchlist only; no live market source
                   </p>
                 </div>
               </div>
@@ -769,7 +676,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                     {
                       id: `msg-${Date.now()}`,
                       sender: 'ai',
-                      text: 'চ্যাট ক্লিয়ার করা হয়েছে। নতুন কোম্পানি মনিটরিং করতে নাম ও কাজের বিবরণ লিখে মেসেজ পাঠান!',
+                      text: 'এই Radar শুধু watchlist-এর তথ্য ব্যবহার করে; live market search সংযুক্ত নেই।',
                       timestamp: 'Just now',
                     },
                   ])
@@ -804,24 +711,28 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                             🎯 {msg.suggestedLead.companyName}
                           </span>
                           <span className="text-[10px] bg-amber-500/10 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
-                            Hot Lead
+                            Watchlist candidate
                           </span>
                         </div>
 
                         <div className="space-y-1 text-slate-300">
                           <p>
-                            👤 <strong>কন্টাক্ট পারসন:</strong> {msg.suggestedLead.contactPerson}
+                            👤 <strong>কন্টাক্ট পারসন:</strong> {msg.suggestedLead.contactPerson || 'Not verified'}
                           </p>
-                          <p className="flex items-center gap-1.5 font-mono text-amber-300 font-bold">
-                            <Phone className="w-3 h-3 text-amber-400" />
-                            <span>মোবাইল: {msg.suggestedLead.mobileNumber}</span>
-                          </p>
+                          {msg.suggestedLead.mobileNumber ? (
+                            <p className="flex items-center gap-1.5 font-mono text-amber-300 font-bold">
+                              <Phone className="w-3 h-3 text-amber-400" />
+                              <span>মোবাইল: {msg.suggestedLead.mobileNumber}</span>
+                            </p>
+                          ) : <p>মোবাইল: Not verified</p>}
                           <p>
                             💼 <strong>প্রস্তাবিত কাজ:</strong> {msg.suggestedLead.recommendedService}
                           </p>
-                          <p className="text-amber-400 font-bold">
-                            💰 আনুমানিক বাজেট: ৳ {msg.suggestedLead.estimatedBudget?.toLocaleString()}/-
-                          </p>
+                          {Number(msg.suggestedLead.estimatedBudget) > 0 && (
+                            <p className="text-amber-400 font-bold">
+                              💰 আনুমানিক বাজেট: ৳ {msg.suggestedLead.estimatedBudget?.toLocaleString()}/-
+                            </p>
+                          )}
                         </div>
 
                         <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
@@ -833,13 +744,15 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                             <span>Add this Lead to Pipeline (পাইপলাইনে যুক্ত করুন)</span>
                           </button>
 
-                          <a
-                            href={`tel:${msg.suggestedLead.mobileNumber}`}
-                            className="px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold transition"
-                            title="Call Contact Person"
-                          >
-                            Call
-                          </a>
+                          {msg.suggestedLead.mobileNumber && (
+                            <a
+                              href={`tel:${msg.suggestedLead.mobileNumber}`}
+                              className="px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold transition"
+                              title="Call Contact Person"
+                            >
+                              Call
+                            </a>
+                          )}
                         </div>
                       </div>
                     )}
@@ -945,7 +858,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
 
                     <p className="text-[11px] text-slate-400 leading-snug">{c.focusArea}</p>
 
-                    {c.contactPerson && (
+                    {(c.contactPerson || c.mobileNumber) && (
                       <div className="text-[11px] text-slate-300 pt-1 border-t border-slate-800/80 space-y-0.5">
                         <div className="flex items-center gap-1 text-slate-400">
                           <User className="w-3 h-3 text-amber-400" />
@@ -979,7 +892,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
             <div className="p-3 bg-amber-950/30 border border-amber-500/20 rounded-xl text-[11px] text-amber-300 space-y-1">
               <strong>💡 টিপস:</strong>
               <p className="text-slate-400">
-                চ্যাটে আপনি যেকোনো কোম্পানির নাম লিখলেই এআই সেটিকে মনিটরিং তালিকায় যুক্ত করবে এবং লিড আসলে স্বয়ংক্রিয়ভাবে নোটিফাই করবে।
+                Watchlist-এর company খুঁজে candidate তৈরি করা যায়। Contact ও market signal নিজে যাচাই করুন; live search সক্রিয় নয়।
               </p>
             </div>
           </div>
@@ -996,7 +909,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                 <span>Live Corporate Watchlist</span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                যে সকল কোম্পানির কাজের সুযোগ আসলে এআই আপনাকে অগ্রাধিকার ভিত্তিতে লিড সরবরাহ করবে।
+                এখানে শুধু আপনার যোগ করা company থাকে; external signal বা live contact lookup নেই।
               </p>
             </div>
 
@@ -1006,7 +919,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                 className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition"
               >
                 <Zap className="w-3.5 h-3.5" />
-                <span>Scan All Companies</span>
+                <span>Monitoring Setup Required</span>
               </button>
               <button
                 onClick={() => setIsMonitorModalOpen(true)}
@@ -1030,8 +943,10 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                           company.status === 'Signal Detected'
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
-                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : company.status === 'Monitoring'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-slate-800 text-slate-300 border-slate-700'
                         }`}
                       >
                         {company.status}
@@ -1055,35 +970,25 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-medium">Monitoring Scope</span>
                     <p className="text-slate-200 font-medium leading-relaxed">{company.focusArea}</p>
 
-                    {company.contactPerson && (
-                      <div className="pt-2 border-t border-slate-800/60 mt-2 space-y-1 text-slate-300">
-                        <div className="flex items-center gap-1.5">
-                          <User className="w-3.5 h-3.5 text-amber-400" />
-                          <span><strong>Contact:</strong> {company.contactPerson}</span>
-                        </div>
-                        {company.mobileNumber && (
-                          <div className="flex items-center gap-1.5 font-mono text-amber-300 font-bold">
-                            <Phone className="w-3 h-3 text-amber-400" />
-                            <span>{company.mobileNumber}</span>
-                          </div>
-                        )}
+                    <div className="pt-2 border-t border-slate-800/60 mt-2 space-y-1 text-slate-300">
+                      <div><strong>Contact:</strong> {company.contactPerson}</div>
+                      <div>Mobile: {company.mobileNumber} · WhatsApp: {company.whatsappNumber}</div>
+                      <div>Email: {company.email}</div>
+                      <div className="border-t border-slate-800 pt-1 mt-1"><strong>{company.executiveTitle}:</strong> {company.executiveName}</div>
+                      <div>Mobile: {company.executiveMobileNumber} · WhatsApp: {company.executiveWhatsappNumber}</div>
+                      <div>Email: {company.executiveEmail}</div>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {company.sourceUrls?.map((source) => (
+                          <a key={source} href={source} target="_blank" rel="noreferrer" className="text-amber-300 underline">Source</a>
+                        ))}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
 
                 <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
                   <span className="text-[11px] text-slate-500">Last scanned: {company.lastChecked}</span>
-                  <button
-                    onClick={() => {
-                      setActiveSubTab('chat');
-                      handleSendMessage(`${company.companyName} থেকে নতুন কোনো লিড বা কাজের সুযোগ আছে কি?`);
-                    }}
-                    className="flex items-center gap-1 text-amber-400 hover:text-amber-300 font-bold text-xs"
-                  >
-                    <span>Check Signals</span>
-                    <ChevronRight className="w-3 h-3" />
-                  </button>
+                  <span className="text-[10px] text-slate-500">Background monitoring paused</span>
                 </div>
               </div>
             ))}
@@ -1153,7 +1058,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                       required
                       value={formData.contactPerson}
                       onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
-                      placeholder="e.g. Sharif Ahmed (Brand Lead)"
+                      placeholder="Enter verified contact name"
                       className="w-full bg-[#0B192C] border border-amber-500/50 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-400 font-medium"
                     />
                   </div>
@@ -1167,7 +1072,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                       required
                       value={formData.mobileNumber}
                       onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value })}
-                      placeholder="e.g. 01819-335128"
+                      placeholder="e.g. 01XXXXXXXXX"
                       className="w-full bg-[#0B192C] border border-amber-500/50 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-400 font-mono font-bold"
                     />
                   </div>
@@ -1175,9 +1080,10 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-slate-400 block mb-1">Email (Optional)</label>
+                    <label className="text-xs font-semibold text-slate-400 block mb-1">Contact Email *</label>
                     <input
                       type="email"
+                      required
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       placeholder="e.g. client@company.com"
@@ -1198,6 +1104,18 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                 </div>
               </div>
 
+              <div className="p-3.5 bg-[#07101C] rounded-xl border border-slate-700 space-y-3">
+                <span className="text-xs font-bold text-amber-400 block uppercase tracking-wider">WhatsApp and CEO / Managing Director</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="text-xs text-slate-300">Contact WhatsApp *<input required type="text" inputMode="tel" value={formData.whatsappNumber || ''} onChange={(e) => setFormData({ ...formData, whatsappNumber: e.target.value })} className="mt-1 w-full bg-[#0B192C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                  <label className="text-xs text-slate-300">CEO / MD Name *<input required type="text" value={formData.executiveName || ''} onChange={(e) => setFormData({ ...formData, executiveName: e.target.value })} className="mt-1 w-full bg-[#0B192C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                  <label className="text-xs text-slate-300">CEO / MD Title *<input required type="text" value={formData.executiveTitle || ''} onChange={(e) => setFormData({ ...formData, executiveTitle: e.target.value })} placeholder="CEO or Managing Director" className="mt-1 w-full bg-[#0B192C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                  <label className="text-xs text-slate-300">CEO / MD Mobile *<input required type="text" inputMode="tel" value={formData.executiveMobileNumber || ''} onChange={(e) => setFormData({ ...formData, executiveMobileNumber: e.target.value })} className="mt-1 w-full bg-[#0B192C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                  <label className="text-xs text-slate-300">CEO / MD WhatsApp *<input required type="text" inputMode="tel" value={formData.executiveWhatsappNumber || ''} onChange={(e) => setFormData({ ...formData, executiveWhatsappNumber: e.target.value })} className="mt-1 w-full bg-[#0B192C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                  <label className="text-xs text-slate-300">CEO / MD Email *<input required type="email" value={formData.executiveEmail || ''} onChange={(e) => setFormData({ ...formData, executiveEmail: e.target.value })} className="mt-1 w-full bg-[#0B192C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
                   Recommended Agency Service *
@@ -1214,10 +1132,10 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Est. Budget (৳) *</label>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Est. Budget (৳)</label>
                   <input
                     type="number"
-                    required
+                    min="0"
                     value={formData.estimatedBudget}
                     onChange={(e) => setFormData({ ...formData, estimatedBudget: Number(e.target.value) })}
                     className="w-full bg-[#07101C] border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500"
@@ -1254,15 +1172,25 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
 
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Trigger Event / Context
+                  Verified Opportunity / Context *
                 </label>
                 <textarea
                   rows={2}
+                  required
                   value={formData.triggerEvent}
                   onChange={(e) => setFormData({ ...formData, triggerEvent: e.target.value })}
                   placeholder="e.g. New showroom opening in GEC circle next month..."
                   className="w-full bg-[#07101C] border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-amber-500"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300 block">Source URLs * (at least two HTTPS links)</label>
+                <textarea rows={3} required value={(formData.sourceUrls || []).join('\n')} onChange={(e) => setFormData({ ...formData, sourceUrls: e.target.value.split(/\r?\n/).map((source) => source.trim()).filter(Boolean) })} placeholder="Official company page\nOfficial announcement or contact page" className="w-full bg-[#07101C] border border-slate-700 rounded-xl p-3 text-xs text-white" />
+                <label className="flex items-start gap-2 text-xs text-slate-300">
+                  <input type="checkbox" required checked={Boolean(formData.contactVerified)} onChange={(e) => setFormData({ ...formData, contactVerified: e.target.checked })} className="mt-0.5 accent-amber-500" />
+                  I checked the contact details and opportunity against these sources.
+                </label>
               </div>
 
               <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
@@ -1288,7 +1216,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
       {/* ===================== MODAL: ADD COMPANY TO MONITOR ===================== */}
       {isMonitorModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#0B192C] border border-slate-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+          <div className="bg-[#0B192C] border border-slate-700 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl">
             <div className="p-4 border-b border-slate-800 bg-[#07101C] flex justify-between items-center">
               <h3 className="font-bold text-white text-base">Add Company to AI Watchlist</h3>
               <button
@@ -1299,7 +1227,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveMonitorSubmit} className="p-5 space-y-4">
+            <form onSubmit={handleSaveMonitorSubmit} className="p-5 space-y-4 max-h-[82vh] overflow-y-auto">
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">Company Name *</label>
                 <input
@@ -1325,7 +1253,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
 
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  What should AI monitor for? (কাজের ধরন) *
+                  Opportunity types / keywords *
                 </label>
                 <textarea
                   rows={2}
@@ -1342,6 +1270,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                   <label className="text-xs font-semibold text-slate-300 block mb-1">Contact Person</label>
                   <input
                     type="text"
+                    required
                     value={monitorForm.contactPerson}
                     onChange={(e) => setMonitorForm({ ...monitorForm, contactPerson: e.target.value })}
                     placeholder="e.g. Marketing Head"
@@ -1352,12 +1281,33 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                   <label className="text-xs font-semibold text-slate-300 block mb-1">Mobile Number</label>
                   <input
                     type="text"
+                    required
                     value={monitorForm.mobileNumber}
                     onChange={(e) => setMonitorForm({ ...monitorForm, mobileNumber: e.target.value })}
-                    placeholder="e.g. 01819-xxxxxx"
+                    placeholder="e.g. 01XXXXXXXXX"
                     className="w-full bg-[#07101C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="text-xs text-slate-300">Contact WhatsApp *<input required type="text" inputMode="tel" value={monitorForm.whatsappNumber || ''} onChange={(e) => setMonitorForm({ ...monitorForm, whatsappNumber: e.target.value })} className="mt-1 w-full bg-[#07101C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                <label className="text-xs text-slate-300">Contact Email *<input required type="email" value={monitorForm.email || ''} onChange={(e) => setMonitorForm({ ...monitorForm, email: e.target.value })} className="mt-1 w-full bg-[#07101C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                <label className="text-xs text-slate-300">CEO / MD Name *<input required type="text" value={monitorForm.executiveName || ''} onChange={(e) => setMonitorForm({ ...monitorForm, executiveName: e.target.value })} className="mt-1 w-full bg-[#07101C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                <label className="text-xs text-slate-300">CEO / MD Title *<input required type="text" value={monitorForm.executiveTitle || ''} onChange={(e) => setMonitorForm({ ...monitorForm, executiveTitle: e.target.value })} placeholder="CEO or Managing Director" className="mt-1 w-full bg-[#07101C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                <label className="text-xs text-slate-300">CEO / MD Mobile *<input required type="text" inputMode="tel" value={monitorForm.executiveMobileNumber || ''} onChange={(e) => setMonitorForm({ ...monitorForm, executiveMobileNumber: e.target.value })} className="mt-1 w-full bg-[#07101C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                <label className="text-xs text-slate-300">CEO / MD WhatsApp *<input required type="text" inputMode="tel" value={monitorForm.executiveWhatsappNumber || ''} onChange={(e) => setMonitorForm({ ...monitorForm, executiveWhatsappNumber: e.target.value })} className="mt-1 w-full bg-[#07101C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+                <label className="text-xs text-slate-300 sm:col-span-2">CEO / MD Email *<input required type="email" value={monitorForm.executiveEmail || ''} onChange={(e) => setMonitorForm({ ...monitorForm, executiveEmail: e.target.value })} className="mt-1 w-full bg-[#07101C] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" /></label>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300 block">Source URLs * (at least two HTTPS links)</label>
+                <textarea rows={3} required value={(monitorForm.sourceUrls || []).join('\n')} onChange={(e) => setMonitorForm({ ...monitorForm, sourceUrls: e.target.value.split(/\r?\n/).map((source) => source.trim()).filter(Boolean) })} placeholder="Official company page\nOfficial leadership/contact page" className="w-full bg-[#07101C] border border-slate-700 rounded-xl p-3 text-xs text-white" />
+                <label className="flex items-start gap-2 text-xs text-slate-300">
+                  <input type="checkbox" required checked={Boolean(monitorForm.contactVerified)} onChange={(e) => setMonitorForm({ ...monitorForm, contactVerified: e.target.checked })} className="mt-0.5 accent-amber-500" />
+                  I checked every contact detail against these sources.
+                </label>
+                <p className="text-[11px] text-amber-300">Profiles are saved in this browser. Background monitoring needs a server-side search provider and scheduler, which are not configured.</p>
               </div>
 
               <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
@@ -1372,7 +1322,7 @@ export const AgenticGrowth: React.FC<AgenticGrowthProps> = ({
                   type="submit"
                   className="px-5 py-2 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs shadow hover:bg-amber-400"
                 >
-                  Start Monitoring
+                  Save Verified Profile
                 </button>
               </div>
             </form>

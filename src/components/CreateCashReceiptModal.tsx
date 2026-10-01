@@ -19,7 +19,7 @@ interface CreateCashReceiptModalProps {
     purpose: string;
     receivedBy: string;
     linkedInvoiceId?: string;
-  }) => void;
+  }) => boolean | void;
   invoices: Invoice[];
   clients: Client[];
 }
@@ -39,14 +39,15 @@ export const CreateCashReceiptModal: React.FC<CreateCashReceiptModalProps> = ({
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>('');
   const [clientName, setClientName] = useState('');
   const [clientCompany, setClientCompany] = useState('');
-  const [amount, setAmount] = useState<number>(10000);
-  const [amountInWords, setAmountInWords] = useState(numberToWordsBDT(10000));
+  const [amount, setAmount] = useState<number>(0);
+  const [amountInWords, setAmountInWords] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Bank Transfer' | 'bKash' | 'Cheque' | 'Nagad'>('Cash');
   const [reference, setReference] = useState('');
   const [bankBranch, setBankBranch] = useState('');
   const [purpose, setPurpose] = useState('Payment against service delivery');
   const [receivedBy, setReceivedBy] = useState(GRAND_COMPANY_INFO.defaultSignatory.name);
   const [errorMsg, setErrorMsg] = useState('');
+  const selectedInvoice = invoices.find((invoice) => invoice.id === selectedInvoiceId);
 
   // Auto-update amount in words whenever amount changes
   useEffect(() => {
@@ -60,14 +61,22 @@ export const CreateCashReceiptModal: React.FC<CreateCashReceiptModalProps> = ({
   // When invoice is selected
   const handleSelectInvoice = (invId: string) => {
     setSelectedInvoiceId(invId);
-    if (!invId) return;
+    if (!invId) {
+      setAmount(0);
+      setClientName('');
+      setClientCompany('');
+      setPurpose('Payment against service delivery');
+      setErrorMsg('');
+      return;
+    }
 
     const inv = invoices.find((i) => i.id === invId);
     if (inv) {
       setClientName(inv.clientName);
       setClientCompany(inv.clientCompany || '');
-      setAmount(inv.due > 0 ? inv.due : inv.total);
+      setAmount(Math.max(0, Number(inv.due) || 0));
       setPurpose(`Payment against Invoice ${inv.invoiceNumber} (${inv.subject})`);
+      setErrorMsg('');
     }
   };
 
@@ -90,12 +99,16 @@ export const CreateCashReceiptModal: React.FC<CreateCashReceiptModalProps> = ({
       setErrorMsg('Please enter a valid received amount.');
       return;
     }
+    if (selectedInvoice && amount > Math.max(0, Number(selectedInvoice.due) || 0)) {
+      setErrorMsg('Received amount cannot exceed this invoice’s remaining due.');
+      return;
+    }
 
     const fullReference = bankBranch
       ? `${reference ? reference + ' - ' : ''}${bankBranch}`
       : reference || (paymentMethod === 'Cash' ? 'Cash in Hand' : 'Direct Payment');
 
-    onSaveReceipt({
+    const saved = onSaveReceipt({
       receiptNumber: receiptNumber.trim() || autoReceiptNo,
       date,
       clientName: clientName.trim(),
@@ -108,6 +121,10 @@ export const CreateCashReceiptModal: React.FC<CreateCashReceiptModalProps> = ({
       receivedBy,
       linkedInvoiceId: selectedInvoiceId || undefined,
     });
+    if (saved === false) {
+      setErrorMsg('This invoice no longer has the selected due. Refresh and try again.');
+      return;
+    }
     onClose();
   };
 
@@ -177,7 +194,7 @@ export const CreateCashReceiptModal: React.FC<CreateCashReceiptModalProps> = ({
           {invoices.length > 0 && (
             <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl space-y-1">
               <label className="block text-[11px] font-bold text-amber-400 uppercase tracking-wider">
-                Select Invoice to Settle / Collect (Optional)
+                Apply Receipt to Previous / Outstanding Due
               </label>
               <select
                 value={selectedInvoiceId}
@@ -185,12 +202,22 @@ export const CreateCashReceiptModal: React.FC<CreateCashReceiptModalProps> = ({
                 className="w-full px-3 py-2 bg-[#07101C] border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none"
               >
                 <option value="">-- Direct Receipt (No specific invoice) --</option>
-                {invoices.map((inv) => (
+                {invoices.filter((inv) => Number(inv.due) > 0).map((inv) => (
                   <option key={inv.id} value={inv.id}>
-                    {inv.invoiceNumber} | {inv.clientName} | Due: ৳{inv.due.toLocaleString()} (Total: ৳{inv.total.toLocaleString()})
+                    {inv.invoiceNumber} | {inv.clientName} | Remaining due: ৳{inv.due.toLocaleString()}
                   </option>
                 ))}
               </select>
+              {selectedInvoice && (
+                <p className="text-[10px] text-emerald-300">
+                  Receipt payment will reduce this invoice’s due and increase collected totals.
+                </p>
+              )}
+              {!selectedInvoice && (
+                <p className="text-[10px] text-slate-400">
+                  Direct receipts print without changing invoice due or collected totals. Select an outstanding invoice to record a previous-due payment.
+                </p>
+              )}
             </div>
           )}
 
@@ -250,6 +277,7 @@ export const CreateCashReceiptModal: React.FC<CreateCashReceiptModalProps> = ({
                 <input
                   type="number"
                   min="1"
+                  max={selectedInvoice?.due}
                   value={amount}
                   onChange={(e) => setAmount(Number(e.target.value))}
                   className="w-full pl-8 pr-3 py-2 bg-[#0B192C] border border-emerald-500/50 rounded-xl text-base font-black text-white focus:outline-none focus:border-emerald-400"
