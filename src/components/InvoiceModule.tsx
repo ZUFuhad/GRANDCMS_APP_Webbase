@@ -4,6 +4,7 @@ import { Receipt, Plus, Eye, Trash2, Search, DollarSign, MessageSquare, Printer,
 import { GRAND_COMPANY_INFO } from '../mock/initialData';
 import { CreateInvoiceModal } from './CreateInvoiceModal';
 import { CreateCashReceiptModal } from './CreateCashReceiptModal';
+import { PreviousDueReceiptModal } from './PreviousDueReceiptModal';
 import { OfficialCashReceiptPrintModal, OfficialReceiptData } from './OfficialCashReceiptPrintModal';
 import { numberToWordsBDT } from '../utils/numberToWords';
 
@@ -12,6 +13,7 @@ interface InvoiceModuleProps {
   clients: Client[];
   quotations?: Quotation[];
   onSaveInvoice: (invoice: Invoice) => void;
+  onSaveClient?: (client: Client) => void;
   onDeleteInvoice: (id: string) => void;
   onPreviewInvoice: (invoice: Invoice) => void;
 }
@@ -21,6 +23,7 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
   clients,
   quotations = [],
   onSaveInvoice,
+  onSaveClient,
   onDeleteInvoice,
   onPreviewInvoice,
 }) => {
@@ -30,6 +33,9 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
   // Modals
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isCreateReceiptOpen, setIsCreateReceiptOpen] = useState(false);
+  const [isPreviousDueModalOpen, setIsPreviousDueModalOpen] = useState(false);
+  const [targetDueInvoiceId, setTargetDueInvoiceId] = useState<string | undefined>(undefined);
+  const [targetDueClientId, setTargetDueClientId] = useState<string | undefined>(undefined);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
   const [printedReceiptData, setPrintedReceiptData] = useState<OfficialReceiptData | null>(null);
 
@@ -41,18 +47,15 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
   const [notes, setNotes] = useState('');
 
   const handleOpenPaymentModal = (invoice: Invoice) => {
-    const remainingDue = Math.max(0, Number(invoice.due) || 0);
-    if (remainingDue === 0) return;
     setPayingInvoice(invoice);
-    setPaymentAmount(remainingDue);
+    setPaymentAmount(invoice.due > 0 ? invoice.due : invoice.total);
     setReference('');
     setNotes(`Payment against ${invoice.invoiceNumber}`);
   };
 
   const handleRecordPayment = (e: React.FormEvent) => {
     e.preventDefault();
-    const remainingDue = Math.max(0, Number(payingInvoice?.due) || 0);
-    if (!payingInvoice || paymentAmount <= 0 || paymentAmount > remainingDue) return;
+    if (!payingInvoice || paymentAmount <= 0) return;
 
     const newPayment: PaymentRecord = {
       id: `pay-${Date.now()}`,
@@ -108,37 +111,36 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
     purpose: string;
     receivedBy: string;
     linkedInvoiceId?: string;
-  }): boolean => {
+  }) => {
     if (receiptData.linkedInvoiceId) {
       const inv = invoices.find((i) => i.id === receiptData.linkedInvoiceId);
-      const remainingDue = Math.max(0, Number(inv?.due) || 0);
-      if (!inv || remainingDue === 0 || receiptData.amount > remainingDue) return false;
-      const newPayment: PaymentRecord = {
-        id: `pay-${Date.now()}`,
-        amount: receiptData.amount,
-        date: receiptData.date,
-        method: receiptData.paymentMethod,
-        reference: receiptData.reference,
-        receivedBy: receiptData.receivedBy,
-        notes: receiptData.purpose,
-      };
-      const newAdvance = (inv.advance || 0) + receiptData.amount;
-      const newDue = Math.max(0, inv.total - newAdvance);
-      const newStatus = newDue === 0 ? 'Paid' : 'Partial';
+      if (inv) {
+        const newPayment: PaymentRecord = {
+          id: `pay-${Date.now()}`,
+          amount: receiptData.amount,
+          date: receiptData.date,
+          method: receiptData.paymentMethod,
+          reference: receiptData.reference,
+          receivedBy: receiptData.receivedBy,
+          notes: receiptData.purpose,
+        };
+        const newAdvance = (inv.advance || 0) + receiptData.amount;
+        const newDue = Math.max(0, inv.total - newAdvance);
+        const newStatus = newDue === 0 ? 'Paid' : 'Partial';
 
-      const updatedInvoice: Invoice = {
-        ...inv,
-        advance: newAdvance,
-        due: newDue,
-        status: newStatus,
-        payments: [...(inv.payments || []), newPayment],
-      };
+        const updatedInvoice: Invoice = {
+          ...inv,
+          advance: newAdvance,
+          due: newDue,
+          status: newStatus,
+          payments: [...(inv.payments || []), newPayment],
+        };
 
-      onSaveInvoice(updatedInvoice);
+        onSaveInvoice(updatedInvoice);
+      }
     }
 
     setPrintedReceiptData(receiptData);
-    return true;
   };
 
   const handlePrintExistingReceipt = (inv: Invoice) => {
@@ -199,6 +201,19 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            onClick={() => {
+              setTargetDueInvoiceId(undefined);
+              setTargetDueClientId(undefined);
+              setIsPreviousDueModalOpen(true);
+            }}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/30 transition-all hover:scale-[1.02]"
+            title="পূর্বের বকেয়া আদায় করুন ও ক্যাশে যোগ করুন"
+          >
+            <Receipt className="w-4 h-4 text-slate-950" />
+            <span>+ Previous Due Receipt (বকেয়া আদায়)</span>
+          </button>
+
+          <button
             onClick={() => setIsCreateReceiptOpen(true)}
             className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-extrabold text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/30 transition-all"
             title="Issue official Grand Communication cash / money receipt voucher"
@@ -209,7 +224,7 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
 
           <button
             onClick={() => setIsCreateInvoiceOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20 transition-all"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-white font-bold text-xs flex items-center gap-2 cursor-pointer border border-slate-600 transition-all"
             title="Create an extra or manual commercial tax invoice"
           >
             <Plus className="w-4 h-4" />
@@ -347,11 +362,28 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
                           <span>View</span>
                         </button>
 
+                        {inv.due > 0 && (
+                          <button
+                            onClick={() => {
+                              setTargetDueInvoiceId(inv.id);
+                              const matchedClient = clients.find(
+                                (c) => c.name === inv.clientName || c.companyName === inv.clientCompany
+                              );
+                              setTargetDueClientId(matchedClient?.id);
+                              setIsPreviousDueModalOpen(true);
+                            }}
+                            className="px-2 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 cursor-pointer font-bold text-[11px] flex items-center gap-1 transition-colors"
+                            title="পূর্বের বকেয়া আদায় রিসিট করুন ও ক্যাশে যোগ করুন"
+                          >
+                            <Receipt className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Due Receipt</span>
+                          </button>
+                        )}
+
                         <button
                           onClick={() => handleOpenPaymentModal(inv)}
-                          disabled={inv.due <= 0}
-                          className="px-2 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed font-bold text-[11px] flex items-center gap-1 transition-colors"
-                          title={inv.due > 0 ? 'Collect payment for outstanding due' : 'Invoice is fully paid'}
+                          className="px-2 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 cursor-pointer font-bold text-[11px] flex items-center gap-1 transition-colors"
+                          title="Collect Payment / Advance"
                         >
                           <DollarSign className="w-3.5 h-3.5" />
                           <span>Collect</span>
@@ -442,7 +474,7 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
                 <input
                   type="number"
                   min="1"
-                  max={payingInvoice.due}
+                  max={payingInvoice.due > 0 ? payingInvoice.due : payingInvoice.total}
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(Number(e.target.value))}
                   className="w-full p-2.5 bg-[#07101C] border border-slate-700 rounded-xl text-sm font-black text-emerald-400 focus:outline-none focus:border-emerald-500"
@@ -509,7 +541,26 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
         </div>
       )}
 
-      {/* 4. Modal: Official Printable Cash / Money Receipt Voucher */}
+      {/* 4. Modal: Previous Due Receipt (পূর্বের বকেয়া আদায়) */}
+      {isPreviousDueModalOpen && (
+        <PreviousDueReceiptModal
+          isOpen={isPreviousDueModalOpen}
+          onClose={() => {
+            setIsPreviousDueModalOpen(false);
+            setTargetDueInvoiceId(undefined);
+            setTargetDueClientId(undefined);
+          }}
+          invoices={invoices}
+          clients={clients}
+          onSaveInvoice={onSaveInvoice}
+          onSaveClient={onSaveClient}
+          onReceiptCompleted={(receiptData) => setPrintedReceiptData(receiptData)}
+          preselectedInvoiceId={targetDueInvoiceId}
+          preselectedClientId={targetDueClientId}
+        />
+      )}
+
+      {/* 5. Modal: Official Printable Cash / Money Receipt Voucher */}
       {printedReceiptData && (
         <OfficialCashReceiptPrintModal
           receipt={printedReceiptData}
