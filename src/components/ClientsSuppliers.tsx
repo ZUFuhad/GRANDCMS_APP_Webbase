@@ -28,6 +28,7 @@ interface ClientsSuppliersProps {
   onDeleteClient?: (id: string) => void;
   onSaveSupplier: (s: Supplier) => void;
   onDeleteSupplier?: (id: string) => void;
+  onCollectDue?: (clientId: string) => void;
 }
 
 const COMMON_PRODUCT_SUGGESTIONS = [
@@ -64,6 +65,7 @@ export const ClientsSuppliers: React.FC<ClientsSuppliersProps> = ({
   onDeleteClient,
   onSaveSupplier,
   onDeleteSupplier,
+  onCollectDue,
 }) => {
   const [activeTab, setActiveTab] = useState<'clients' | 'suppliers'>('clients');
   const [searchTerm, setSearchTerm] = useState('');
@@ -542,23 +544,36 @@ export const ClientsSuppliers: React.FC<ClientsSuppliersProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-1.5 mt-3 pt-2 border-t border-slate-800/80">
-                  <button
-                    onClick={() => handleOpenClientModal(c)}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 transition-colors cursor-pointer text-xs"
-                    title="Edit Client"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  {onDeleteClient && (
+                <div className="flex items-center justify-between gap-1.5 mt-3 pt-2 border-t border-slate-800/80">
+                  {c.currentDue > 0 && onCollectDue ? (
                     <button
-                      onClick={() => onDeleteClient(c.id)}
-                      className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900 transition-colors cursor-pointer text-xs"
-                      title="Delete Client"
+                      onClick={() => onCollectDue(c.id)}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                      title="পূর্বের বকেয়া আদায় রিসিট করুন ও ক্যাশে যোগ করুন"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Receipt className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Collect Due (বকেয়া আদায়)</span>
                     </button>
-                  )}
+                  ) : <div />}
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleOpenClientModal(c)}
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 transition-colors cursor-pointer text-xs"
+                      title="Edit Client"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    {onDeleteClient && (
+                      <button
+                        onClick={() => onDeleteClient(c.id)}
+                        className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900 transition-colors cursor-pointer text-xs"
+                        title="Delete Client"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

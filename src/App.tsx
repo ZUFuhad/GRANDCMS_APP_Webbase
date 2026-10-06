@@ -37,6 +37,7 @@ import { QuotationPrintView } from './components/QuotationPrintView';
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [selectedDueClientId, setSelectedDueClientId] = useState<string | undefined>(undefined);
 
   const [data, setData] = useState(loadStorageData());
   const [previewDoc, setPreviewDoc] = useState<{ document: Quotation | Invoice; type: 'Quotation' | 'Invoice' } | null>(null);
@@ -681,6 +682,7 @@ export function App() {
               invoices={data.invoices}
               clients={data.clients}
               quotations={data.quotations}
+              initialDueClientId={selectedDueClientId}
               onSaveInvoice={handleSaveInvoice}
               onSaveClient={handleSaveClient}
               onDeleteInvoice={handleDeleteInvoice}
@@ -696,6 +698,10 @@ export function App() {
               onDeleteClient={handleDeleteClient}
               onSaveSupplier={handleSaveSupplier}
               onDeleteSupplier={handleDeleteSupplier}
+              onCollectDue={(clientId) => {
+                setSelectedDueClientId(clientId);
+                setActiveTab('invoices');
+              }}
             />
           )}
 

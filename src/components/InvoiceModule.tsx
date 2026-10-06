@@ -12,6 +12,7 @@ interface InvoiceModuleProps {
   invoices: Invoice[];
   clients: Client[];
   quotations?: Quotation[];
+  initialDueClientId?: string;
   onSaveInvoice: (invoice: Invoice) => void;
   onSaveClient?: (client: Client) => void;
   onDeleteInvoice: (id: string) => void;
@@ -22,22 +23,34 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
   invoices,
   clients,
   quotations = [],
+  initialDueClientId,
   onSaveInvoice,
   onSaveClient,
   onDeleteInvoice,
   onPreviewInvoice,
 }) => {
+  const [activeView, setActiveView] = useState<'invoices' | 'receipts'>('invoices');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [receiptMethodFilter, setReceiptMethodFilter] = useState<string>('all');
   
   // Modals
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isCreateReceiptOpen, setIsCreateReceiptOpen] = useState(false);
   const [isPreviousDueModalOpen, setIsPreviousDueModalOpen] = useState(false);
   const [targetDueInvoiceId, setTargetDueInvoiceId] = useState<string | undefined>(undefined);
-  const [targetDueClientId, setTargetDueClientId] = useState<string | undefined>(undefined);
+  const [targetDueClientId, setTargetDueClientId] = useState<string | undefined>(initialDueClientId);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
   const [printedReceiptData, setPrintedReceiptData] = useState<OfficialReceiptData | null>(null);
+
+  // Auto-open previous due modal if initialDueClientId is passed
+  React.useEffect(() => {
+    if (initialDueClientId) {
+      setTargetDueClientId(initialDueClientId);
+      setTargetDueInvoiceId(undefined);
+      setIsPreviousDueModalOpen(true);
+    }
+  }, [initialDueClientId]);
 
   // Quick Payment Modal State
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -183,6 +196,38 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
   const totalDue = invoices.reduce((sum, inv) => sum + (Number(inv.due) || 0), 0);
   const totalCollected = totalInvoiced - totalDue;
 
+  // Flatten all receipts / payments across all invoices
+  const allReceipts = invoices.flatMap((inv) =>
+    (inv.payments || []).map((pay, pIdx) => ({
+      ...pay,
+      id: pay.id || `pay-${inv.id}-${pIdx}`,
+      invoiceId: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      clientName: inv.clientName,
+      clientCompany: inv.clientCompany,
+      subject: inv.subject,
+    }))
+  ).sort((a, b) => b.date.localeCompare(a.date));
+
+  const filteredReceipts = allReceipts.filter((r) => {
+    const q = searchTerm.toLowerCase();
+    const matchesSearch =
+      r.clientName.toLowerCase().includes(q) ||
+      (r.clientCompany && r.clientCompany.toLowerCase().includes(q)) ||
+      r.invoiceNumber.toLowerCase().includes(q) ||
+      (r.reference && r.reference.toLowerCase().includes(q)) ||
+      (r.notes && r.notes.toLowerCase().includes(q));
+
+    const matchesMethod =
+      receiptMethodFilter === 'all' || r.method.toLowerCase() === receiptMethodFilter.toLowerCase();
+
+    return matchesSearch && matchesMethod;
+  });
+
+  const totalReceiptsAmount = allReceipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  const totalCashAmount = allReceipts.filter((r) => r.method === 'Cash').reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  const totalDigitalAmount = totalReceiptsAmount - totalCashAmount;
+
   return (
     <div className="space-y-6">
       {/* Top Header & Action Buttons */}
@@ -252,7 +297,38 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
         </div>
       </div>
 
-      {/* Search & Filter Bar */}
+      {/* View Switcher Tabs (Invoices vs Money Receipts History) */}
+      <div className="flex border-b border-slate-800 gap-2 sm:gap-4 pb-1">
+        <button
+          onClick={() => setActiveView('invoices')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
+            activeView === 'invoices'
+              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+          }`}
+        >
+          <Receipt className="w-4 h-4 text-amber-400" />
+          <span>Commercial Invoices ({invoices.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveView('receipts')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
+            activeView === 'receipts'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+          }`}
+        >
+          <DollarSign className="w-4 h-4 text-emerald-400" />
+          <span>Money Receipts & Cash Inflow ({allReceipts.length})</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        </button>
+      </div>
+
+      {/* ================= VIEW 1: COMMERCIAL INVOICES ================= */}
+      {activeView === 'invoices' && (
+        <div className="space-y-4">
+          {/* Search & Filter Bar */}
       <div className="bg-[#0B192C] rounded-2xl p-4 shadow-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-200">
         <div className="flex items-center gap-3 w-full sm:w-96 bg-[#07101C] rounded-xl px-3 py-2 border border-slate-700">
           <Search className="w-4 h-4 text-slate-400" />
@@ -416,6 +492,166 @@ export const InvoiceModule: React.FC<InvoiceModuleProps> = ({
           </table>
         </div>
       </div>
+    </div>
+  )}
+
+  {/* ================= VIEW 2: MONEY RECEIPTS & CASH INFLOW ================= */}
+  {activeView === 'receipts' && (
+    <div className="space-y-4 animate-fade-in">
+      {/* Quick Receipts Metrics Banner */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-[#0B192C] p-3.5 rounded-2xl border border-slate-800 shadow-xl flex items-center justify-between">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Money Receipts</span>
+            <span className="text-xl font-black text-white">{allReceipts.length} Vouchers</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
+            <FileCheck className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-[#0B192C] p-3.5 rounded-2xl border border-slate-800 shadow-xl flex items-center justify-between">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-emerald-400 block">Total Cash In-Hand</span>
+            <span className="text-xl font-black text-emerald-400">৳ {totalCashAmount.toLocaleString()}/-</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <DollarSign className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-[#0B192C] p-3.5 rounded-2xl border border-slate-800 shadow-xl flex items-center justify-between">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-amber-400 block">Bank / bKash / Cheque</span>
+            <span className="text-xl font-black text-amber-400">৳ {totalDigitalAmount.toLocaleString()}/-</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <Receipt className="w-5 h-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Receipts Search & Method Filters */}
+      <div className="bg-[#0B192C] rounded-2xl p-4 shadow-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-200">
+        <div className="flex items-center gap-3 w-full sm:w-96 bg-[#07101C] rounded-xl px-3 py-2 border border-slate-700">
+          <Search className="w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search receipts by client, reference, invoice..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="bg-transparent text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none w-full"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+          {['all', 'Cash', 'Bank Transfer', 'bKash', 'Nagad', 'Cheque'].map((method) => (
+            <button
+              key={method}
+              onClick={() => setReceiptMethodFilter(method)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                receiptMethodFilter === method
+                  ? 'bg-emerald-500 text-slate-950 shadow-md font-extrabold'
+                  : 'bg-[#07101C] text-slate-400 hover:text-white border border-slate-700'
+              }`}
+            >
+              {method}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Receipts Table */}
+      <div className="bg-[#0B192C] rounded-2xl shadow-xl border border-slate-800 overflow-hidden text-slate-200">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-[#07101C] text-slate-300 font-bold border-b border-slate-800">
+              <tr>
+                <th className="p-3.5">Date</th>
+                <th className="p-3.5">Client & Company</th>
+                <th className="p-3.5">Invoice Ref</th>
+                <th className="p-3.5 text-right">Amount Received</th>
+                <th className="p-3.5 text-center">Payment Method</th>
+                <th className="p-3.5">Ref / Txn / Cheque</th>
+                <th className="p-3.5">Received By</th>
+                <th className="p-3.5 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {filteredReceipts.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                    No money receipt records found. Create a cash receipt or previous due receipt to populate this ledger!
+                  </td>
+                </tr>
+              ) : (
+                filteredReceipts.map((rcpt, idx) => (
+                  <tr key={rcpt.id || idx} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="p-3.5 text-slate-300 whitespace-nowrap font-medium">{rcpt.date}</td>
+                    <td className="p-3.5 font-semibold text-white">
+                      <div>{rcpt.clientName}</div>
+                      {rcpt.clientCompany && (
+                        <div className="text-[10px] text-slate-400 font-normal">{rcpt.clientCompany}</div>
+                      )}
+                    </td>
+                    <td className="p-3.5 font-mono text-amber-400 text-xs font-bold">
+                      {rcpt.invoiceNumber}
+                    </td>
+                    <td className="p-3.5 text-right font-black text-emerald-400 text-sm">
+                      ৳ {Number(rcpt.amount).toLocaleString()}/-
+                    </td>
+                    <td className="p-3.5 text-center">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                          rcpt.method === 'Cash'
+                            ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                            : rcpt.method === 'Bank Transfer'
+                            ? 'bg-blue-950 text-blue-300 border-blue-800'
+                            : rcpt.method === 'bKash'
+                            ? 'bg-pink-950 text-pink-300 border-pink-800'
+                            : 'bg-purple-950 text-purple-300 border-purple-800'
+                        }`}
+                      >
+                        {rcpt.method}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-slate-300 font-mono text-[11px] truncate max-w-[140px]">
+                      {rcpt.reference || 'N/A'}
+                    </td>
+                    <td className="p-3.5 text-slate-400 text-[11px]">{rcpt.receivedBy || 'Grand Official'}</td>
+                    <td className="p-3.5 text-center">
+                      <button
+                        onClick={() => {
+                          setPrintedReceiptData({
+                            receiptNumber: `GCMS/MR/2026/${String(Math.floor(Math.random() * 899) + 101)}`,
+                            date: rcpt.date,
+                            clientName: rcpt.clientName,
+                            clientCompany: rcpt.clientCompany,
+                            amount: rcpt.amount,
+                            amountInWords: numberToWordsBDT(rcpt.amount),
+                            paymentMethod: rcpt.method,
+                            reference: rcpt.reference,
+                            purpose: rcpt.notes || `Payment against ${rcpt.invoiceNumber}`,
+                            receivedBy: rcpt.receivedBy || GRAND_COMPANY_INFO.defaultSignatory.name,
+                            invoiceNumber: rcpt.invoiceNumber,
+                          });
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 font-bold text-[11px] flex items-center gap-1 mx-auto cursor-pointer transition-colors"
+                        title="Print Official Stamped Money Receipt"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>Print MR</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )}
 
       {/* 1. Modal: Create New Standalone / Extra Invoice */}
       {isCreateInvoiceOpen && (
