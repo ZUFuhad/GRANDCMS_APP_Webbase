@@ -1,8 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-export const DEFAULT_SUPABASE_PROJECT_ID = 'dbddplawdicokffewuwz';
-export const DEFAULT_SUPABASE_URL = 'https://dbddplawdicokffewuwz.supabase.co';
-export const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_cxT_7DYRjNyi5YWZq3n5zQ_LVlsK7br';
+export const DEFAULT_SUPABASE_PROJECT_ID = 'grwtylyqwxoqadwlzqkl';
+export const DEFAULT_SUPABASE_URL = 'https://grwtylyqwxoqadwlzqkl.supabase.co';
+export const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_2nFoM67Qtkq6Waj8eyNalQ_tPvYvSZQ';
 
 export interface SupabaseConfig {
   url: string;
@@ -32,18 +32,18 @@ export function sanitizeSupabaseUrl(rawUrl?: string | null): string {
     return DEFAULT_SUPABASE_URL;
   }
 
-  // If user pasted dashboard URL, e.g. "https://supabase.com/dashboard/project/dbddplawdicokffewuwz/editor/..."
+  // If user pasted dashboard URL, e.g. "https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl/editor/..."
   const dashboardMatch = clean.match(/project\/([a-z0-9_-]{10,60})/i);
   if (dashboardMatch && dashboardMatch[1]) {
     return `https://${dashboardMatch[1]}.supabase.co`;
   }
 
-  // If user entered only project ref, e.g. "dbddplawdicokffewuwz"
+  // If user entered only project ref, e.g. "grwtylyqwxoqadwlzqkl"
   if (/^[a-z0-9_-]{12,50}$/i.test(clean)) {
     return `https://${clean}.supabase.co`;
   }
 
-  // If user entered "dbddplawdicokffewuwz.supabase.co" without protocol
+  // If user entered "grwtylyqwxoqadwlzqkl.supabase.co" without protocol
   if (clean.includes('.supabase.co') && !clean.startsWith('http://') && !clean.startsWith('https://')) {
     clean = `https://${clean}`;
   }

@@ -2,9 +2,9 @@
 -- GRAND CMS - Supabase (PostgreSQL) Database Schema & Seed Data
 -- Agency: GRAND Communication & Marketing (EST. 2004)
 -- Address: 20 No Shop CDA Market, Kazir Dewri, Chattogram
--- Target Project ID: dbddplawdicokffewuwz
--- Dashboard: https://supabase.com/dashboard/project/dbddplawdicokffewuwz
--- SQL Editor: https://supabase.com/dashboard/project/dbddplawdicokffewuwz/sql
+-- Target Project ID: grwtylyqwxoqadwlzqkl
+-- Dashboard: https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl
+-- SQL Editor: https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl/sql
 -- ==========================================================
 
 -- 1. Clients Table

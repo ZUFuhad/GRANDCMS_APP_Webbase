@@ -34,17 +34,17 @@ const GithubIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' })
   </svg>
 );
 
-const SUPABASE_PROJECT_ID = 'dbddplawdicokffewuwz';
-const SUPABASE_DEFAULT_URL = 'https://dbddplawdicokffewuwz.supabase.co';
+const SUPABASE_PROJECT_ID = 'grwtylyqwxoqadwlzqkl';
+const SUPABASE_DEFAULT_URL = 'https://grwtylyqwxoqadwlzqkl.supabase.co';
 const GITHUB_REPO_URL = 'https://github.com/ZUFuhad/GRANDCMS_APP_Webbase';
 
 const SUPABASE_SQL = `-- ==========================================================
 -- GRAND CMS - Supabase (PostgreSQL) Database Schema & Seed Data
 -- Agency: GRAND Communication & Marketing (EST. 2004)
 -- Address: 20 No Shop CDA Market, Kazir Dewri, Chattogram
--- Target Project ID: dbddplawdicokffewuwz
--- Dashboard: https://supabase.com/dashboard/project/dbddplawdicokffewuwz
--- SQL Editor: https://supabase.com/dashboard/project/dbddplawdicokffewuwz/sql
+-- Target Project ID: grwtylyqwxoqadwlzqkl
+-- Dashboard: https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl
+-- SQL Editor: https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl/sql
 -- ==========================================================
 
 -- 1. Clients Table
@@ -417,7 +417,7 @@ export const DeploymentHub: React.FC = () => {
                   <span className="font-mono font-bold text-amber-400">{SUPABASE_PROJECT_ID}</span>{' '}
                   &bull; Direct Dashboard:{' '}
                   <a
-                    href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz"
+                    href="https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl"
                     target="_blank"
                     rel="noreferrer"
                     className="text-emerald-400 font-bold hover:underline inline-flex items-center gap-1"
@@ -455,7 +455,7 @@ export const DeploymentHub: React.FC = () => {
                   type="text"
                   value={supabaseUrl}
                   onChange={(e) => setSupabaseUrl(e.target.value)}
-                  placeholder="https://dbddplawdicokffewuwz.supabase.co"
+                  placeholder="https://grwtylyqwxoqadwlzqkl.supabase.co"
                   className="w-full bg-[#07101C] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -466,7 +466,7 @@ export const DeploymentHub: React.FC = () => {
                     Supabase Anon / Publishable Public Key *
                   </label>
                   <a
-                    href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/settings/api"
+                    href="https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl/settings/api"
                     target="_blank"
                     rel="noreferrer"
                     className="text-[11px] text-emerald-400 font-bold hover:underline inline-flex items-center gap-1"
@@ -516,7 +516,7 @@ export const DeploymentHub: React.FC = () => {
                 <button
                   onClick={handleResetToOfficial}
                   className="px-4 py-2 bg-blue-900/60 hover:bg-blue-800 text-blue-200 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer border border-blue-600/50"
-                  title="Reset to official Grand CMS Supabase Project (dbddplawdicokffewuwz)"
+                  title="Reset to official Grand CMS Supabase Project (grwtylyqwxoqadwlzqkl)"
                 >
                   <Database className="w-3.5 h-3.5 text-blue-400" />
                   <span>Connect Official Supabase</span>
@@ -556,7 +556,7 @@ export const DeploymentHub: React.FC = () => {
                     <p className="text-[11px] text-slate-400 mt-1">
                       Tip: Open your{' '}
                       <a
-                        href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/sql"
+                        href="https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl/sql"
                         target="_blank"
                         rel="noreferrer"
                         className="text-amber-400 underline font-bold"
@@ -565,7 +565,7 @@ export const DeploymentHub: React.FC = () => {
                       </a>
                       , paste the schema below, and click <strong>Run</strong>. Then paste your{' '}
                       <a
-                        href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/settings/api"
+                        href="https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl/settings/api"
                         target="_blank"
                         rel="noreferrer"
                         className="text-amber-400 underline font-bold"
@@ -599,7 +599,7 @@ export const DeploymentHub: React.FC = () => {
                 </p>
               </div>
               <a
-                href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/sql"
+                href="https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl/sql"
                 target="_blank"
                 rel="noreferrer"
                 className="mt-3 text-emerald-400 text-xs font-bold hover:underline inline-flex items-center gap-1"
@@ -619,7 +619,7 @@ export const DeploymentHub: React.FC = () => {
                 </p>
               </div>
               <a
-                href="https://supabase.com/dashboard/project/dbddplawdicokffewuwz/settings/api"
+                href="https://supabase.com/dashboard/project/grwtylyqwxoqadwlzqkl/settings/api"
                 target="_blank"
                 rel="noreferrer"
                 className="mt-3 text-emerald-400 text-xs font-bold hover:underline inline-flex items-center gap-1"
