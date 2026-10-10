@@ -110,10 +110,12 @@ export class SupabaseService {
       } catch {}
     }
 
-    if (!url || !url.includes('.supabase.co')) {
+    if (!url || !url.includes('.supabase.co') || url.includes('dbddplawdicokffewuwz') || url.includes('hqltwanywfeblxckpwgc')) {
       url = DEFAULT_SUPABASE_URL;
+      anonKey = DEFAULT_SUPABASE_ANON_KEY;
       try {
         localStorage.setItem('grand_supabase_url', DEFAULT_SUPABASE_URL);
+        localStorage.setItem('grand_supabase_anon_key', DEFAULT_SUPABASE_ANON_KEY);
       } catch {}
     }
 
